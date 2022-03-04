@@ -1,0 +1,58 @@
+DEBUG 2022-01-20 10:36:05,181 : Comecando o tratamento da imagem 1037-293B_005.fits
+DEBUG 2022-01-20 10:36:05,181 : Começando a redução de Dark
+DEBUG 2022-01-20 10:36:05,181 : Criando o MasterDark
+DEBUG 2022-01-20 10:36:10,455 : MasterDark Criado
+DEBUG 2022-01-20 10:36:10,482 : Completado a redução de Dark
+DEBUG 2022-01-20 10:36:10,483 : Começando a redução de Flat
+DEBUG 2022-01-20 10:36:10,483 : Criando o MasterFlat
+DEBUG 2022-01-20 10:36:15,984 : MasterFlat Criado
+DEBUG 2022-01-20 10:36:16,030 : Completado a redução de Flat
+DEBUG 2022-01-20 10:36:16,030 : Começando a eliminação do Background
+DEBUG 2022-01-20 10:36:16,591 : Background removido
+DEBUG 2022-01-20 10:36:16,591 : Começando a eliminação do CrossTalk
+DEBUG 2022-01-20 10:36:16,613 : Crosstalk corrigido
+DEBUG 2022-01-20 10:36:16,676 : Comecando o tratamento da imagem 1037-293B_002.fits
+DEBUG 2022-01-20 10:36:16,676 : Começando a redução de Dark
+DEBUG 2022-01-20 10:36:16,712 : Completado a redução de Dark
+DEBUG 2022-01-20 10:36:16,712 : Começando a redução de Flat
+DEBUG 2022-01-20 10:36:16,769 : Completado a redução de Flat
+DEBUG 2022-01-20 10:36:16,769 : Começando a eliminação do Background
+DEBUG 2022-01-20 10:36:17,297 : Background removido
+DEBUG 2022-01-20 10:36:17,297 : Começando a eliminação do CrossTalk
+DEBUG 2022-01-20 10:36:17,312 : Crosstalk corrigido
+DEBUG 2022-01-20 10:36:17,369 : Comecando o tratamento da imagem FitsMudado2.fits
+DEBUG 2022-01-20 10:36:17,369 : Começando a redução de Dark
+DEBUG 2022-01-20 10:36:17,410 : Completado a redução de Dark
+DEBUG 2022-01-20 10:36:17,410 : Começando a redução de Flat
+DEBUG 2022-01-20 10:36:17,471 : Completado a redução de Flat
+DEBUG 2022-01-20 10:36:17,471 : Começando a eliminação do Background
+DEBUG 2022-01-20 10:36:17,979 : Background removido
+DEBUG 2022-01-20 10:36:17,979 : Começando a eliminação do CrossTalk
+DEBUG 2022-01-20 10:36:17,991 : Crosstalk corrigido
+DEBUG 2022-01-20 10:36:18,055 : Comecando o tratamento da imagem 1037-293B_004.fits
+DEBUG 2022-01-20 10:36:18,055 : Começando a redução de Dark
+DEBUG 2022-01-20 10:36:18,090 : Completado a redução de Dark
+DEBUG 2022-01-20 10:36:18,090 : Começando a redução de Flat
+DEBUG 2022-01-20 10:36:18,144 : Completado a redução de Flat
+DEBUG 2022-01-20 10:36:18,144 : Começando a eliminação do Background
+DEBUG 2022-01-20 10:36:18,598 : Background removido
+DEBUG 2022-01-20 10:36:18,598 : Começando a eliminação do CrossTalk
+DEBUG 2022-01-20 10:36:18,614 : Crosstalk corrigido
+DEBUG 2022-01-20 10:36:18,683 : Comecando o tratamento da imagem 1037-293B_006.fits
+DEBUG 2022-01-20 10:36:18,683 : Começando a redução de Dark
+DEBUG 2022-01-20 10:36:18,721 : Completado a redução de Dark
+DEBUG 2022-01-20 10:36:18,722 : Começando a redução de Flat
+DEBUG 2022-01-20 10:36:18,788 : Completado a redução de Flat
+DEBUG 2022-01-20 10:36:18,788 : Começando a eliminação do Background
+DEBUG 2022-01-20 10:36:19,282 : Background removido
+DEBUG 2022-01-20 10:36:19,282 : Começando a eliminação do CrossTalk
+DEBUG 2022-01-20 10:36:19,297 : Crosstalk corrigido
+DEBUG 2022-01-20 10:36:19,361 : Comecando o tratamento da imagem 1037-293B_003.fits
+DEBUG 2022-01-20 10:36:19,361 : Começando a redução de Dark
+DEBUG 2022-01-20 10:36:19,400 : Completado a redução de Dark
+DEBUG 2022-01-20 10:36:19,400 : Começando a redução de Flat
+DEBUG 2022-01-20 10:36:19,477 : Completado a redução de Flat
+DEBUG 2022-01-20 10:36:19,478 : Começando a eliminação do Background
+DEBUG 2022-01-20 10:36:20,048 : Background removido
+DEBUG 2022-01-20 10:36:20,048 : Começando a eliminação do CrossTalk
+DEBUG 2022-01-20 10:36:20,072 : Crosstalk corrigido

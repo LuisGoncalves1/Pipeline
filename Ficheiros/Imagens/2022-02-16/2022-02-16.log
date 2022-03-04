@@ -1,0 +1,73 @@
+DEBUG 2022-02-16 12:27:22,350 : Criando os MasterDarks
+DEBUG 2022-02-16 12:27:22,350 : Criando o MasterDark do filtro B
+DEBUG 2022-02-16 12:27:33,140 : MasterDark Criado do filtro B
+DEBUG 2022-02-16 12:27:33,144 : MasterDarks Criados
+DEBUG 2022-02-16 12:27:33,146 : Criando os MasterFlats
+DEBUG 2022-02-16 12:27:33,147 : Criando o MasterFlat do filtro B
+DEBUG 2022-02-16 12:27:39,922 : MasterFlat Criado do filtro B
+DEBUG 2022-02-16 12:27:39,922 : MasterFlats Criados
+DEBUG 2022-02-16 12:27:39,961 : Comecando o tratamento da imagem 1037-293B_005.fits
+DEBUG 2022-02-16 12:27:39,962 : Comecando o tratamento da imagem 1037-293B_002.fits
+DEBUG 2022-02-16 12:27:39,968 : Comecando o tratamento da imagem FitsMudado2.fits
+DEBUG 2022-02-16 12:27:39,979 : Comecando o tratamento da imagem Teste.fits
+INFO 2022-02-16 12:27:39,990 : using the unit adu passed to the FITS reader instead of the unit adu in the FITS file.
+DEBUG 2022-02-16 12:27:39,996 : Comecando o tratamento da imagem 1037-293B_004.fits
+INFO 2022-02-16 12:27:40,012 : using the unit adu passed to the FITS reader instead of the unit adu in the FITS file.
+DEBUG 2022-02-16 12:27:40,013 : Comecando o tratamento da imagem 1037-293B_006.fits
+DEBUG 2022-02-16 12:27:40,056 : Comecando o tratamento da imagem 1037-293B_003.fits
+DEBUG 2022-02-16 12:27:40,102 : Começando a redução de Dark de FitsMudado2.fits
+DEBUG 2022-02-16 12:27:40,131 : Começando a redução de Dark de 1037-293B_002.fits
+DEBUG 2022-02-16 12:27:40,170 : Começando a redução de Dark de Teste.fits
+DEBUG 2022-02-16 12:27:40,218 : Começando a redução de Dark de 1037-293B_005.fits
+DEBUG 2022-02-16 12:27:40,228 : Começando a redução de Dark de 1037-293B_003.fits
+DEBUG 2022-02-16 12:27:40,288 : Começando a redução de Dark de 1037-293B_006.fits
+DEBUG 2022-02-16 12:27:40,295 : Começando a redução de Dark de 1037-293B_004.fits
+DEBUG 2022-02-16 12:27:40,368 : Completado a redução de Dark deFitsMudado2.fits
+DEBUG 2022-02-16 12:27:40,369 : Começando a redução de Flat de FitsMudado2.fits
+DEBUG 2022-02-16 12:27:40,412 : Completado a redução de Dark de1037-293B_002.fits
+DEBUG 2022-02-16 12:27:40,412 : Começando a redução de Flat de 1037-293B_002.fits
+DEBUG 2022-02-16 12:27:40,489 : Completado a redução de Dark de1037-293B_005.fits
+DEBUG 2022-02-16 12:27:40,490 : Começando a redução de Flat de 1037-293B_005.fits
+DEBUG 2022-02-16 12:27:40,573 : Completado a redução de Dark de1037-293B_004.fits
+DEBUG 2022-02-16 12:27:40,579 : Começando a redução de Flat de 1037-293B_004.fits
+DEBUG 2022-02-16 12:27:40,579 : Completado a redução de Dark de1037-293B_006.fits
+DEBUG 2022-02-16 12:27:40,588 : Começando a redução de Flat de 1037-293B_006.fits
+DEBUG 2022-02-16 12:27:40,606 : Completado a redução de Dark deTeste.fits
+DEBUG 2022-02-16 12:27:40,637 : Começando a redução de Flat de Teste.fits
+DEBUG 2022-02-16 12:27:40,643 : Completado a redução de Dark de1037-293B_003.fits
+DEBUG 2022-02-16 12:27:40,643 : Começando a redução de Flat de 1037-293B_003.fits
+DEBUG 2022-02-16 12:27:40,752 : Completado a redução de Flat de FitsMudado2.fits
+DEBUG 2022-02-16 12:27:40,753 : Começando a eliminação do Background de FitsMudado2.fits
+DEBUG 2022-02-16 12:27:40,783 : Completado a redução de Flat de 1037-293B_002.fits
+DEBUG 2022-02-16 12:27:40,784 : Começando a eliminação do Background de 1037-293B_002.fits
+DEBUG 2022-02-16 12:27:40,795 : Completado a redução de Flat de 1037-293B_004.fits
+DEBUG 2022-02-16 12:27:40,807 : Começando a eliminação do Background de 1037-293B_004.fits
+DEBUG 2022-02-16 12:27:40,809 : Completado a redução de Flat de 1037-293B_005.fits
+DEBUG 2022-02-16 12:27:40,809 : Começando a eliminação do Background de 1037-293B_005.fits
+DEBUG 2022-02-16 12:27:40,848 : Completado a redução de Flat de 1037-293B_006.fits
+DEBUG 2022-02-16 12:27:40,849 : Começando a eliminação do Background de 1037-293B_006.fits
+DEBUG 2022-02-16 12:27:40,906 : Completado a redução de Flat de Teste.fits
+DEBUG 2022-02-16 12:27:40,917 : Começando a eliminação do Background de Teste.fits
+DEBUG 2022-02-16 12:27:40,917 : Completado a redução de Flat de 1037-293B_003.fits
+DEBUG 2022-02-16 12:27:40,930 : Começando a eliminação do Background de 1037-293B_003.fits
+DEBUG 2022-02-16 12:27:41,987 : Background removido de 1037-293B_005.fits
+DEBUG 2022-02-16 12:27:41,987 : Começando a eliminação do CrossTalk de 1037-293B_005.fits
+DEBUG 2022-02-16 12:27:42,063 : Background removido de 1037-293B_003.fits
+DEBUG 2022-02-16 12:27:42,064 : Começando a eliminação do CrossTalk de 1037-293B_003.fits
+DEBUG 2022-02-16 12:27:42,078 : Crosstalk corrigido de 1037-293B_005.fits
+DEBUG 2022-02-16 12:27:42,102 : Background removido de 1037-293B_006.fits
+DEBUG 2022-02-16 12:27:42,104 : Crosstalk corrigido de 1037-293B_003.fits
+DEBUG 2022-02-16 12:27:42,104 : Começando a eliminação do CrossTalk de 1037-293B_006.fits
+DEBUG 2022-02-16 12:27:42,152 : Background removido de 1037-293B_002.fits
+DEBUG 2022-02-16 12:27:42,165 : Começando a eliminação do CrossTalk de 1037-293B_002.fits
+DEBUG 2022-02-16 12:27:42,170 : Crosstalk corrigido de 1037-293B_006.fits
+DEBUG 2022-02-16 12:27:42,195 : Background removido de 1037-293B_004.fits
+DEBUG 2022-02-16 12:27:42,209 : Começando a eliminação do CrossTalk de 1037-293B_004.fits
+DEBUG 2022-02-16 12:27:42,208 : Crosstalk corrigido de 1037-293B_002.fits
+DEBUG 2022-02-16 12:27:42,259 : Crosstalk corrigido de 1037-293B_004.fits
+DEBUG 2022-02-16 12:27:42,286 : Background removido de FitsMudado2.fits
+DEBUG 2022-02-16 12:27:42,287 : Começando a eliminação do CrossTalk de FitsMudado2.fits
+DEBUG 2022-02-16 12:27:42,317 : Crosstalk corrigido de FitsMudado2.fits
+DEBUG 2022-02-16 12:27:42,384 : Background removido de Teste.fits
+DEBUG 2022-02-16 12:27:42,384 : Começando a eliminação do CrossTalk de Teste.fits
+DEBUG 2022-02-16 12:27:42,405 : Crosstalk corrigido de Teste.fits
