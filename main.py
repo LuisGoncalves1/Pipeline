@@ -12,11 +12,11 @@ import logging
 import time
 import matplotlib.pyplot as plt
 from pathlib import Path
-# ~ import astroscrappy
+import astroscrappy
 import threading
 
 """
-Headers: FILTER, EXPOSURE, TIME,
+Headers: FILTER, EXPOSURE, TIME,RA,DEC,NAXIS1,NAXIS2
 
 
 """
@@ -27,11 +27,13 @@ def Analise(ficheiro):
 
 TempoEntreImagens = 5
 directory = os.getcwd()
-config = FuncoesReducao.LerFicheiro(directory+"/Ficheiros/Config/ConfigurationPASO.txt")
+config = FuncoesReducao.ReadPipelineConfig(directory+"/Files/Config/ConfigurationPASO.txt")
 config['LOGGER'] = int(config['LOGGER'])
-data = date.today()
+# ~ data = date.today()
+data = "2022-03-21"
 
-diretoria = "%s/Ficheiros/Imagens/%s" %(directory,str(data))
+
+diretoria = "%s/Files/Imagens/%s" %(directory,str(data))
 if not os.path.isdir(diretoria):
 	print('Não existem dados ainda deste dia')
 	os.mkdir(diretoria)
@@ -40,6 +42,7 @@ if not os.path.isdir(diretoria):
 	os.mkdir(diretoria + "/Imagens")
 	os.mkdir(diretoria + "/ImagensTratadas")
 	os.mkdir(diretoria + "/ImagensReduzidas")
+	os.mkdir(diretoria + "/Master")
 
 
 if type(config['LOGGER']) != int or 0>config['LOGGER'] or 50<config['LOGGER']:
@@ -57,12 +60,12 @@ if config["DARK"]:
 	else:
 		logging.debug("Criando os MasterDarks")
 		for filtro in os.listdir(path=diretoria + "/Darks"):
-			if not os.path.isfile(diretoria + "/MasterDark" + filtro + ".fits"):
+			if not os.path.isfile(diretoria + "/Master/MasterDark" + filtro + ".fits"):
 				logging.debug("Criando o MasterDark do filtro " + filtro)
 				MasterDark = FuncoesReducao.CriarMaster(diretoria + "/Darks/" + filtro + '/', diretoria, filtro,'dark')
 				logging.debug("MasterDark Criado do filtro " + filtro)
 			else:
-				MasterDark = CCDData.read(diretoria + "/MasterDark" + filtro + ".fits") 
+				MasterDark = CCDData.read(diretoria + "/Master/MasterDark" + filtro + ".fits") 
 		logging.debug("MasterDarks Criados")
 																
 if config["FLAT"]:
@@ -72,12 +75,12 @@ if config["FLAT"]:
 	else:		
 		logging.debug("Criando os MasterFlats")
 		for filtro in os.listdir(path=diretoria + "/Flats"):		
-			if not os.path.isfile(diretoria + "/MasterFlat" + filtro + ".fits"):
+			if not os.path.isfile(diretoria + "/Master/MasterFlat" + filtro + ".fits"):
 				logging.debug("Criando o MasterFlat do filtro " + filtro)
 				MasterFlat = FuncoesReducao.CriarMaster(diretoria + "/Flats/" + filtro + '/', diretoria, filtro,'flat')
 				logging.debug("MasterFlat Criado do filtro " + filtro)
 			else:
-				MasterFlat = CCDData.read(diretoria + "/MasterFlat" + filtro + ".fits") 
+				MasterFlat = CCDData.read(diretoria + "/Master/MasterFlat" + filtro + ".fits") 
 		logging.debug("MasterFlats Criados")
 
 while True:

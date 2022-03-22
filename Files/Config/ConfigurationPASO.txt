@@ -1,0 +1,15 @@
+# Initial Correction
+
+LOGGER 10
+
+# Reduction Process
+FLAT True
+DARK True
+CrossTalk True
+CosmicRays True
+Background True
+
+
+
+# Visual
+GRAPH False

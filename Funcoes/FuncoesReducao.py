@@ -9,11 +9,91 @@ from astropy.stats import SigmaClip
 import numpy as np
 import logging
 import matplotlib.pyplot as plt
-# ~ import astroscrappy
+import astroscrappy
 from pathlib import Path
 import cv2
 import time
+import subprocess
+import itertools
+from astropy.io import fits
 
+def sextractor(image,directory,catout):
+	''' image -> image name
+		directory -> Pipeline folder directory
+		catout -> directory of output catalog
+	
+	
+	'''
+	SexDir = directory + '/Files/Sextractor/'
+	cmd = {}
+	cmd['source-extractor'] = image
+	cmd['-c'] = SexDir + 'default.sex'
+	# ~ cmd['-CATALOG_NAME'] = SexDir + catout
+	cmd['-PARAMETERS_NAME'] = SexDir + 'default.param'
+	cmd['-FILTER_NAME'] = SexDir + 'default.conv'
+	cmd['-WEIGHT_IMAGE'] = SexDir + 'weight.fits'
+	
+	
+	list_cmd = list(itertools.chain.from_iterable(list(cmd.items())))
+	result = subprocess.run(list_cmd, capture_output=True)
+	return result
+	
+def astrometry(DirImagem,header,DirAstro,X,Y):
+	cmd = ['solve-field', '--no-plots',
+           '--x-column', X,
+           '--y-column', Y,
+           '--no-remove-lines',
+           '--uniformize', '0',
+           '--width', str(header['NAXIS1']),
+           '--height', str(header['NAXIS2']),           
+           '--crpix-center',
+           # ~ '--depth', depth_str,
+           '--cpulimit', '120',
+           # ~ '--tweak-order', str(get_par(set_zogy.astronet_tweak_order,tel)),
+           '--scale-low', '0.1',
+           '--scale-high', '1',
+           '--scale-units', 'app',
+           '--ra', header['RA'],
+           '--dec', header['DEC'],
+           '--radius', '0.5',
+           '--new-fits', 'none',
+           '--overwrite',
+           '--dir', DirAstro,
+           DirImagem
+    ]
+    # log cmd executed
+	cmd_str = ' '.join(cmd)
+
+	result = subprocess.run(cmd, capture_output=True)
+	status = result.returncode
+	return result, status
+	      	
+def BestMaster(Directory,time,Filter,Type):
+	files = os.listdir(Directory)
+	files = [B for B in files if B[6:10] == Type and B[10] == Filter and int(B[11:14]) <= time]
+	times = [B[11:14] for B in files]
+	
+	return files[times.index(max(times))]
+	
+def ReadSextractorFile(SexFile):
+	dic = {}
+	config = {}
+	with open(SexFile,'r') as text:
+		while True:
+			line = text.readline()
+			A = line.split()
+			if line != '':
+				if line[0] == '#':
+					dic[int(A[1])] = A[2]
+					config[A[2]] = []
+				else:
+					for i in range(len(A)):
+						config[dic[i+1]].append(A[i])
+			else:
+				break
+			
+	return config		
+				
 def str2bool(valor):
 	if valor == "True":
 		return True
@@ -22,7 +102,7 @@ def str2bool(valor):
 	else:
 		return valor
 
-def LerFicheiro(ficheiro):
+def ReadPipelineConfig(ficheiro):
 	dic = {}
 	with open(ficheiro,'r') as texto:
 		while True:
@@ -91,10 +171,10 @@ def AnalisarImagem(ficheiro,logging,config,diretoria):
 		Dados.data = cv2.filter2D(np.array(Dados.data), -1, convolution_kernel)
 		logging.debug("Crosstalk corrigido de " + ficheiro)
 
-	# ~ if config["CosmicRays"]:
-		# ~ logging.debug("Começando a eliminação dos CosmicRays de " + ficheiro)
-		# ~ crmask, Dados.data = astroscrappy.detect_cosmics(Dados.data, inmask = None, sepmed = False, cleantype='medmask', fsmode = 'median', verbose=False)  #deteta os raios cósmicos numa matriz numpy
-		# ~ logging.debug("CosmicRays eliminados de " + ficheiro)
+	if config["CosmicRays"]:
+		logging.debug("Começando a eliminação dos CosmicRays de " + ficheiro)
+		crmask, Dados.data = astroscrappy.detect_cosmics(Dados.data, inmask = None, sepmed = False, cleantype='medmask', fsmode = 'median', verbose=False)  #deteta os raios cósmicos numa matriz numpy
+		logging.debug("CosmicRays eliminados de " + ficheiro)
 		
 						
 	Dados.write(diretoria  + '/ImagensReduzidas/' + ficheiro)
@@ -109,3 +189,7 @@ def AnalisarImagem(ficheiro,logging,config,diretoria):
 		ax[1].set_title('Imagem Final')
 		ax[1].imshow(Dados.data,cmap='gray',vmin=vmin or np.nanpercentile(Dados.data, 0.1),vmax=vmax or np.nanpercentile(Dados.data, 99))
 		plt.show() 
+
+def SeeFitsTables(filedir):
+	hdul = fits.open(filedir)
+	return hdul[1].data
