@@ -12,7 +12,7 @@ PARAMETERS_NAME  default.param  # name of the file containing catalog contents
 #------------------------------- Extraction ----------------------------------
  
 DETECT_TYPE      CCD            # CCD (linear) or PHOTO (with gamma correction)
-DETECT_MINAREA   3              # min. # of pixels above threshold
+DETECT_MINAREA   12              # min. # of pixels above threshold
 
 DETECT_THRESH    1.5            # <sigmas> or <threshold>,<ZP> in mag.arcsec-2
 ANALYSIS_THRESH  1.5            # <sigmas> or <threshold>,<ZP> in mag.arcsec-2
@@ -63,7 +63,7 @@ STARNNW_NAME     default.nnw    # Neural-Network_Weight table filename
  
 #------------------------------ Background -----------------------------------
  
-BACK_TYPE        AUTO           # AUTO or MANUAL
+BACK_TYPE        MANUAL           # AUTO or MANUAL
 BACK_VALUE       0.0            # Default background value in MANUAL mode
 BACK_SIZE        64             # Background mesh: <size> or <width>,<height>
 BACK_FILTERSIZE  3              # Background filter: <size> or <width>,<height>
@@ -94,7 +94,7 @@ ASSOCSELEC_TYPE  MATCHED        # ASSOC selection type: ALL, MATCHED or -MATCHED
 
 #----------------------------- Miscellaneous ---------------------------------
  
-VERBOSE_TYPE     NORMAL         # can be QUIET, NORMAL or FULL
+VERBOSE_TYPE     FULL         # can be QUIET, NORMAL or FULL
 HEADER_SUFFIX    .head          # Filename extension for additional headers
 WRITE_XML        N              # Write XML file (Y/N)?
 XML_NAME         sex.xml        # Filename for XML output

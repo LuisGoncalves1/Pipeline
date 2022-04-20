@@ -1,4 +1,4 @@
-from Funcoes import FuncoesReducao
+from Funcoes import FuncoesReducao, FuncoesMaster
 from datetime import date
 import os
 from astropy.nddata import CCDData
@@ -21,8 +21,8 @@ Headers: FILTER, EXPOSURE, TIME,RA,DEC,NAXIS1,NAXIS2
 
 """
 
-def Analise(ficheiro):
-	FuncoesReducao.AnalisarImagem(ficheiro,logging,config,diretoria)
+def Analise(ficheiro,Masters):
+	FuncoesReducao.AnalisarImagem(ficheiro,Masters,logging,config,diretoria)
 
 
 TempoEntreImagens = 5
@@ -30,7 +30,7 @@ directory = os.getcwd()
 config = FuncoesReducao.ReadPipelineConfig(directory+"/Files/Config/ConfigurationPASO.txt")
 config['LOGGER'] = int(config['LOGGER'])
 # ~ data = date.today()
-data = "2022-03-21"
+data = "2022-03-20"
 
 
 diretoria = "%s/Files/Imagens/%s" %(directory,str(data))
@@ -39,10 +39,10 @@ if not os.path.isdir(diretoria):
 	os.mkdir(diretoria)
 	os.mkdir(diretoria + "/Darks")
 	os.mkdir(diretoria + "/Flats")
-	os.mkdir(diretoria + "/Imagens")
+	os.mkdir(diretoria + "/Imagens") 
 	os.mkdir(diretoria + "/ImagensTratadas")
 	os.mkdir(diretoria + "/ImagensReduzidas")
-	os.mkdir(diretoria + "/Master")
+	os.mkdir(diretoria + "/Masters")
 
 
 if type(config['LOGGER']) != int or 0>config['LOGGER'] or 50<config['LOGGER']:
@@ -52,36 +52,8 @@ LOG_FORMAT = "%(levelname)s %(asctime)s : %(message)s"
 log_file_name = "%s/%s.log" %(diretoria,str(data))
 logging.basicConfig(filename = log_file_name, level = config['LOGGER'],format = LOG_FORMAT, filemode ='w')
 logger = logging.getLogger()
-
-if config["DARK"]:
-	if len(os.listdir(path=diretoria + "/Darks")) == 0:
-		logging.warning("Não existem Darks, removendo este passo da reducao")
-		config["DARK"] = False
-	else:
-		logging.debug("Criando os MasterDarks")
-		for filtro in os.listdir(path=diretoria + "/Darks"):
-			if not os.path.isfile(diretoria + "/Master/MasterDark" + filtro + ".fits"):
-				logging.debug("Criando o MasterDark do filtro " + filtro)
-				MasterDark = FuncoesReducao.CriarMaster(diretoria + "/Darks/" + filtro + '/', diretoria, filtro,'dark')
-				logging.debug("MasterDark Criado do filtro " + filtro)
-			else:
-				MasterDark = CCDData.read(diretoria + "/Master/MasterDark" + filtro + ".fits") 
-		logging.debug("MasterDarks Criados")
-																
-if config["FLAT"]:
-	if len(os.listdir(path=diretoria + "/Flats")) == 0:
-		logging.warning("Não existem Flats, removendo este passo da reducao")
-		config["FLAT"] = False
-	else:		
-		logging.debug("Criando os MasterFlats")
-		for filtro in os.listdir(path=diretoria + "/Flats"):		
-			if not os.path.isfile(diretoria + "/Master/MasterFlat" + filtro + ".fits"):
-				logging.debug("Criando o MasterFlat do filtro " + filtro)
-				MasterFlat = FuncoesReducao.CriarMaster(diretoria + "/Flats/" + filtro + '/', diretoria, filtro,'flat')
-				logging.debug("MasterFlat Criado do filtro " + filtro)
-			else:
-				MasterFlat = CCDData.read(diretoria + "/Master/MasterFlat" + filtro + ".fits") 
-		logging.debug("MasterFlats Criados")
+FuncoesMaster.CreateMasters(diretoria)
+Masters = FuncoesMaster.SeeMasters(diretoria)
 
 while True:
 	# Enquanto n tem imagens
@@ -89,10 +61,8 @@ while True:
 		print('Não existem mais dados deste dia')
 		time.sleep(TempoEntreImagens)
 	
+	
 	for ficheiro in os.listdir(path=diretoria + "/Imagens"):
 		Path(diretoria + '/Imagens/' + ficheiro).rename(diretoria + '/ImagensTratadas/' + ficheiro)
-		t = threading.Thread(target = Analise,args = (ficheiro,))
+		t = threading.Thread(target = Analise,args = (ficheiro,Masters))
 		t.start()
-		
-		
-		

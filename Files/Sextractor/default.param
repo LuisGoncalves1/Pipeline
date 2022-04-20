@@ -1,12 +1,12 @@
 NUMBER                   Running object number                                    
 #EXT_NUMBER               FITS extension number                                    
-FLUX_ISO                 Isophotal flux                                            [count]
+#FLUX_ISO                 Isophotal flux                                            [count]
 #FLUXERR_ISO              RMS error for isophotal flux                              [count]
 #MAG_ISO                  Isophotal magnitude                                       [mag]
 #MAGERR_ISO               RMS error for isophotal magnitude                         [mag]
-#FLUX_ISOCOR              Corrected isophotal flux                                  [count]
+FLUX_ISOCOR              Corrected isophotal flux                                  [count]
 #FLUXERR_ISOCOR           RMS error for corrected isophotal flux                    [count]
-#MAG_ISOCOR               Corrected isophotal magnitude                             [mag]
+MAG_ISOCOR               Corrected isophotal magnitude                             [mag]
 #MAGERR_ISOCOR            RMS error for corrected isophotal magnitude               [mag]
 #FLUX_APER                Flux vector within fixed circular aperture(s)             [count]
 #FLUXERR_APER             RMS error vector for aperture flux(es)                    [count]
@@ -189,7 +189,7 @@ Y_IMAGE                  Object position along y                                
 #NIMAFLAGS_ISO            Number of flagged pixels entering IMAFLAGS_ISO           
 #NLOWWEIGHT_ISO           Nb of pixels with low weight over the iso. profile       
 #NLOWDWEIGHT_ISO          Nb of pixels with low det. weight over the iso. profile  
-#FWHM_IMAGE               FWHM assuming a gaussian core                             [pixel]
+FWHM_IMAGE               FWHM assuming a gaussian core                             [pixel]
 #FWHM_WORLD               FWHM assuming a gaussian core                             [deg]
 #ELONGATION               A_IMAGE/B_IMAGE                                          
 #ELLIPTICITY              1 - B_IMAGE/A_IMAGE                                      

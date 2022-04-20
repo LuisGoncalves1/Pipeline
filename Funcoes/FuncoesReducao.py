@@ -16,6 +16,11 @@ import time
 import subprocess
 import itertools
 from astropy.io import fits
+from astropy.table import Table
+from astropy.coordinates import SkyCoord, Longitude,  Angle, match_coordinates_sky
+from .FuncoesMaster import BestDark
+
+
 
 def sextractor(image,directory,catout):
 	''' image -> image name
@@ -38,10 +43,10 @@ def sextractor(image,directory,catout):
 	result = subprocess.run(list_cmd, capture_output=True)
 	return result
 	
-def astrometry(DirImagem,header,DirAstro,X,Y):
+def astrometry(DirImagem,header,DirAstro):
 	cmd = ['solve-field', '--no-plots',
-           '--x-column', X,
-           '--y-column', Y,
+           # ~ '--x-column', 'X_IMAGE',
+           # ~ '--y-column', 'Y_IMAGE',
            '--no-remove-lines',
            '--uniformize', '0',
            '--width', str(header['NAXIS1']),
@@ -49,32 +54,26 @@ def astrometry(DirImagem,header,DirAstro,X,Y):
            '--crpix-center',
            # ~ '--depth', depth_str,
            '--cpulimit', '120',
-           # ~ '--tweak-order', str(get_par(set_zogy.astronet_tweak_order,tel)),
            '--scale-low', '0.1',
            '--scale-high', '1',
            '--scale-units', 'app',
            '--ra', header['RA'],
            '--dec', header['DEC'],
+           '--tweak-order','2',
            '--radius', '0.5',
-           '--new-fits', 'none',
+           # ~ '--new-fits', 'none',
            '--overwrite',
            '--dir', DirAstro,
-           DirImagem
+           # ~ '--out', 'Ola.fits',
+            DirImagem
     ]
     # log cmd executed
 	cmd_str = ' '.join(cmd)
-
+	
 	result = subprocess.run(cmd, capture_output=True)
 	status = result.returncode
 	return result, status
-	      	
-def BestMaster(Directory,time,Filter,Type):
-	files = os.listdir(Directory)
-	files = [B for B in files if B[6:10] == Type and B[10] == Filter and int(B[11:14]) <= time]
-	times = [B[11:14] for B in files]
-	
-	return files[times.index(max(times))]
-	
+	      		
 def ReadSextractorFile(SexFile):
 	dic = {}
 	config = {}
@@ -117,67 +116,63 @@ def ReadPipelineConfig(ficheiro):
 				break
 	return dic
 
-def CriarMaster(Pasta, PastaFinal, Filtro, tipo):
-	if tipo == 'flat':
-		texto = '/MasterFlat'
-	elif tipo == 'dark':
-		texto = '/MasterDark'
-	else:
-		print('Tipo errado')
-		return 0
+def AnalisarImagem(ficheiro,Masters,logging,config,diretoria):
+	logging.debug("Startins to analise " + ficheiro)
+	Data = CCDData.read(diretoria + "/ImagensTratadas/" + ficheiro, unit = 'adu') 
+	raw = Data.data.copy()
+	Filter = Data.header['FILTER']
+	exposure = int(float(Data.header['EXPTIME'].replace(',','')))
 	
 	
-	Ficheiros = [Pasta + x for x in os.listdir(Pasta)]
-	Lidos = [CCDData.read(X, unit='adu', Format = 'fits') for X in Ficheiros]
-	Master = ccdproc.combine(Lidos,method='median')
-	Master.header['FILTRO'] = Filtro
-	
-	Master.write(PastaFinal + texto + Filtro + '.fits')
-	return Master
-
-def AnalisarImagem(ficheiro,logging,config,diretoria):
-	logging.debug("Comecando o tratamento da imagem " + ficheiro)
-	Dados = CCDData.read(diretoria + "/ImagensTratadas/" + ficheiro, unit = 'adu') 
-	raw = Dados.data.copy()
 	if config["DARK"]:
-		logging.debug("Começando a redução de Dark de " + ficheiro)		
-		MasterDark = CCDData.read(diretoria + "/MasterDark" + Dados.header['FILTER'] + ".fits") 
-		Dados = ccdproc.ccd_process(Dados, dark_frame=MasterDark,dark_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) * u.s,data_exposure = float(Dados.header["EXPOSURE"].replace(',','.')) *u.s)
-		Dados.header['DARK'] = True
-		logging.debug("Completado a redução de Dark de" + ficheiro)
+		logging.debug("Starting Dark correction of file " + ficheiro)
+		Master = BestDark(diretoria + '/Masters',exposure,Filter)
+		if Master == []:
+			logging.warning('There are no Darks available of type %s' (Filter))
+		else:
+			Master = diretoria + '/Masters/' + Master
+			MasterDark = CCDData.read(Master) 
+			Data = ccdproc.ccd_process(Data, dark_frame=MasterDark,dark_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) * u.s,data_exposure = float(Data.header["EXPOSURE"].replace(',','.')) *u.s)
+			Data.header['DARK'] = True
+			logging.debug("Finished Dark correction of file " + ficheiro)
 							
 	if config["FLAT"]:
-		logging.debug("Começando a redução de Flat de " + ficheiro)
-		MasterFlat = CCDData.read(diretoria + "/MasterFlat" + Dados.header['FILTER'] + ".fits") 		
-		Dados = ccdproc.ccd_process(Dados, master_flat = MasterFlat)
-		Dados.header['FLAT'] = True
-		logging.debug("Completado a redução de Flat de " + ficheiro)	
-		
+		logging.debug("Starting Fits correction of file " + ficheiro)
+		if Filter not in Masters['Flat']:
+			logging.warning('There are no Flats available of type %s' (Filter))
+		else:
+			Master = diretoria + '/Masters/MasterFlat' + Filter + '.fits'
+			MasterFlat = CCDData.read(Master)	
+			Data = ccdproc.ccd_process(Data, master_flat = MasterFlat)
+			Data.header['FLAT'] = True
+			logging.debug("Finished Fits correction of file " + ficheiro)	
+				
 	if config["Background"]:
-		logging.debug("Começando a eliminação do Background de " + ficheiro)
+		logging.debug("Eliminating Background of " + ficheiro)
 		bkg = MeanBackground(SigmaClip(sigma=3.))
-		bkg_value = bkg.calc_background(Dados)
-		Dados = Dados.subtract(bkg_value*np.ones(np.shape(Dados))*u.adu,propagate_uncertainties=True,handle_meta='first_found')
-		logging.debug("Background removido de " + ficheiro)
+		bkg_value = bkg.calc_background(Data)
+		Data = Data.subtract(bkg_value*np.ones(np.shape(Data))*u.adu,propagate_uncertainties=True,handle_meta='first_found')
+		logging.debug("Background removed from " + ficheiro)
 					
 	if config["CrossTalk"]:
-		logging.debug("Começando a eliminação do CrossTalk de " + ficheiro)
+		logging.debug("Starting CrossTalk correction of " + ficheiro)
 		alfa1 = 0.015
 		alfa2 = 0.008
 		convolution_kernel = np.array([[0, alfa1, 0], 
 									   [alfa1, 1-4*alfa1, alfa1], 
 									   [0, alfa1, 0]])
 
-		Dados.data = cv2.filter2D(np.array(Dados.data), -1, convolution_kernel)
-		logging.debug("Crosstalk corrigido de " + ficheiro)
+		Data.data = cv2.filter2D(np.array(Data.data), -1, convolution_kernel)
+		logging.debug("Crosstalk corrected from " + ficheiro)
 
 	if config["CosmicRays"]:
-		logging.debug("Começando a eliminação dos CosmicRays de " + ficheiro)
-		crmask, Dados.data = astroscrappy.detect_cosmics(Dados.data, inmask = None, sepmed = False, cleantype='medmask', fsmode = 'median', verbose=False)  #deteta os raios cósmicos numa matriz numpy
-		logging.debug("CosmicRays eliminados de " + ficheiro)
+		logging.debug("Starting CosmicRays Correction of " + ficheiro)
+		crmask, Data.data = astroscrappy.detect_cosmics(Data.data, inmask = None, sepmed = False, cleantype='medmask', fsmode = 'median', verbose=False)  #deteta os raios cósmicos numa matriz numpy
+		logging.debug("CosmicRays removed from " + ficheiro)
 		
+	
 						
-	Dados.write(diretoria  + '/ImagensReduzidas/' + ficheiro)
+	Data.write(diretoria  + '/ImagensReduzidas/' + ficheiro)
 
 
 	if config['GRAPH']:
@@ -187,9 +182,36 @@ def AnalisarImagem(ficheiro,logging,config,diretoria):
 		ax[0].set_title('Imagem Inicial')
 		ax[0].imshow(raw,cmap='gray',vmin=vmin or np.nanpercentile(raw, 0.1),vmax=vmax or np.nanpercentile(raw, 99))
 		ax[1].set_title('Imagem Final')
-		ax[1].imshow(Dados.data,cmap='gray',vmin=vmin or np.nanpercentile(Dados.data, 0.1),vmax=vmax or np.nanpercentile(Dados.data, 99))
+		ax[1].imshow(Data.data,cmap='gray',vmin=vmin or np.nanpercentile(Data.data, 0.1),vmax=vmax or np.nanpercentile(Data.data, 99))
 		plt.show() 
 
 def SeeFitsTables(filedir):
 	hdul = fits.open(filedir)
 	return hdul[1].data
+
+def ReadCatalogue(catalog_path,max_magnitude=None,min_magnitude=None,max_variability=None):
+	catalog = Table.read(catalog_path)
+	mask = np.isfinite(catalog['ra']) & np.isfinite(catalog['dec'])
+	catalog = catalog[mask]
+
+	if max_magnitude is not None:
+		catalog = catalog[catalog['v_mag'] <= max_magnitude]
+        
+	if min_magnitude is not None:
+		catalog = catalog[catalog['v_mag'] >= min_magnitude]
+
+	if max_variability is not None:
+		catalog = catalog[catalog['variability'] == max_variability]
+	
+	
+	# ~ return SkyCoord(ra=Angle(catalog['ra']), dec=Angle(catalog['dec']))
+	return SkyCoord(ra = Longitude(catalog['ra'], unit = u.deg), dec = np.array(catalog['dec'])*u.deg,frame = 'cirs'), catalog['v_mag']
+
+def find_matching_stars(catalog_stars, image_stars, max_sep=0.5 * u.deg):
+    if len(image_stars) == 0:
+        return np.array([], dtype=int), np.zeros(len(catalog_stars), dtype=bool)
+
+    idx, d2d, d3d = match_coordinates_sky(catalog_stars, image_stars,storekdtree = True)
+    mask = d2d < max_sep
+
+    return idx[mask], mask
