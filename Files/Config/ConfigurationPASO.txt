@@ -8,8 +8,17 @@ DARK True
 CrossTalk True
 CosmicRays True
 Background True
-
+Astrometry True
 
 
 # Visual
 GRAPH False
+
+
+# Astrometry
+
+scale-low 0.1
+scale-high 1
+scale.units app
+radius 1.6
+max_sep 0.2

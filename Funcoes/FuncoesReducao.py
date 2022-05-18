@@ -33,7 +33,7 @@ def sextractor(image,directory,catout):
 	cmd = {}
 	cmd['source-extractor'] = image
 	cmd['-c'] = SexDir + 'default.sex'
-	# ~ cmd['-CATALOG_NAME'] = SexDir + catout
+	cmd['-CATALOG_NAME'] =  catout
 	cmd['-PARAMETERS_NAME'] = SexDir + 'default.param'
 	cmd['-FILTER_NAME'] = SexDir + 'default.conv'
 	cmd['-WEIGHT_IMAGE'] = SexDir + 'weight.fits'
@@ -45,14 +45,11 @@ def sextractor(image,directory,catout):
 	
 def astrometry(DirImagem,header,DirAstro):
 	cmd = ['solve-field', '--no-plots',
-           # ~ '--x-column', 'X_IMAGE',
-           # ~ '--y-column', 'Y_IMAGE',
            '--no-remove-lines',
            '--uniformize', '0',
            '--width', str(header['NAXIS1']),
            '--height', str(header['NAXIS2']),           
            '--crpix-center',
-           # ~ '--depth', depth_str,
            '--cpulimit', '120',
            '--scale-low', '0.1',
            '--scale-high', '1',
@@ -60,11 +57,40 @@ def astrometry(DirImagem,header,DirAstro):
            '--ra', header['RA'],
            '--dec', header['DEC'],
            '--tweak-order','2',
-           '--radius', '0.5',
-           # ~ '--new-fits', 'none',
+           '--radius', '1.6',
            '--overwrite',
            '--dir', DirAstro,
-           # ~ '--out', 'Ola.fits',
+            DirImagem]
+            
+    # log cmd executed
+	cmd_str = ' '.join(cmd)
+	print(cmd_str)
+	
+	result = subprocess.run(cmd, capture_output=True)
+	status = result.returncode
+	return result, status
+	      		
+def astrometrytesteComSex(DirImagem,header,DirAstro):
+	cmd = ['solve-field', '--no-plots',
+           '--no-remove-lines',
+           '--uniformize', '0',
+           '--width', str(header['NAXIS1']),
+           '--height', str(header['NAXIS2']),           
+           '--crpix-center',
+           '--cpulimit', '120',
+           '--scale-low', '1',
+           '--scale-high', '5',
+           '--scale-units', 'app',
+           '--ra', '11:40:04',
+           '--dec', '+06:00:23',
+           '--tweak-order','2',
+           '--use-sextractor',
+           '--sextractor-config', '/home/luis/Desktop/Codigos/Pipeline/Files/Sextractor/default.sex',
+           '--radius', '3',
+           '--overwrite',
+           '--dir', DirAstro,
+           '-s', 'MAG_ISOCOR',
+           '-a', '-X', 'X_IMAGE', '-Y', 'Y_IMAGE',
             DirImagem
     ]
     # log cmd executed
@@ -72,9 +98,59 @@ def astrometry(DirImagem,header,DirAstro):
 	
 	result = subprocess.run(cmd, capture_output=True)
 	status = result.returncode
-	return result, status
+	return result, status	      		
+
+def astrometrytesteComFicheiroSex(DirCatalogo,header,DirAstro,NameImage):
+	cmd = ['solve-field', '--no-plots',
+	       '--x-column', 'X_IMAGE',
+           '--y-column', 'Y_IMAGE',
+           '--no-remove-lines',
+           '--uniformize', '0',
+           '--width', str(header['NAXIS1']),
+           '--height', str(header['NAXIS2']),           
+           '--crpix-center',
+           '--cpulimit', '120',
+           '--scale-low', '1',
+           '--scale-high', '5',
+           '--scale-units', 'app',
+           # ~ '--ra', header['RA'],
+           # ~ '--dec', header['DEC'],
+           '--ra', '11:40:04',
+           '--dec', '+06:00:23',
+           '--tweak-order','2',
+           '--rdls', 'none',
+           # ~ '--wcs', 'none',
+           '--solved','none',
+           '--axy','none',
+           '--match','none',
+           # ~ '--new-fits', DirAstro + NameImage,
+           '--radius', '3',
+           '--overwrite',
+           '--dir', DirAstro,
+            DirCatalogo
+    ]
+    # log cmd executed
+	cmd_str = ' '.join(cmd)
+	
+	result = subprocess.run(cmd, capture_output=True)
+	status = result.returncode
+	return result, status	      		
 	      		
-def ReadSextractorFile(SexFile):
+def XYToRaDec(FileWc,FileXY,FileOutput):
+	cmd = ['wcs-xy2rd', 
+		'-w',FileWc,
+		'-i', FileXY,
+		'-o', FileOutput,
+		'-X','X_IMAGE',
+		'-Y','Y_IMAGE']
+		
+	cmd_str = ' '.join(cmd)
+	
+	result = subprocess.run(cmd, capture_output=True)
+	status = result.returncode
+	return result, status	           		
+	      		
+def ReadSextractorFileTxt(SexFile):
 	dic = {}
 	config = {}
 	with open(SexFile,'r') as text:
@@ -91,8 +167,20 @@ def ReadSextractorFile(SexFile):
 			else:
 				break
 			
-	return config		
-				
+	return config
+	
+def ReadSextractorFileFit(SexFile):
+	config = {}
+	Ficheiro = fits.open(SexFile)
+	Dados = Ficheiro[1]
+	Colunas = Dados.columns
+	for i in Colunas:
+		Coluna = i.name
+		config[Coluna] = Dados.data[Coluna]
+		
+		
+	return config
+							
 def str2bool(valor):
 	if valor == "True":
 		return True
@@ -116,13 +204,13 @@ def ReadPipelineConfig(ficheiro):
 				break
 	return dic
 
-def AnalisarImagem(ficheiro,Masters,logging,config,diretoria):
+def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory):
 	logging.debug("Startins to analise " + ficheiro)
 	Data = CCDData.read(diretoria + "/ImagensTratadas/" + ficheiro, unit = 'adu') 
 	raw = Data.data.copy()
 	Filter = Data.header['FILTER']
+	# ~ exposure = Data.header['EXPTIME']
 	exposure = int(float(Data.header['EXPTIME'].replace(',','')))
-	
 	
 	if config["DARK"]:
 		logging.debug("Starting Dark correction of file " + ficheiro)
@@ -135,7 +223,7 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria):
 			Data = ccdproc.ccd_process(Data, dark_frame=MasterDark,dark_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) * u.s,data_exposure = float(Data.header["EXPOSURE"].replace(',','.')) *u.s)
 			Data.header['DARK'] = True
 			logging.debug("Finished Dark correction of file " + ficheiro)
-							
+	
 	if config["FLAT"]:
 		logging.debug("Starting Fits correction of file " + ficheiro)
 		if Filter not in Masters['Flat']:
@@ -154,6 +242,7 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria):
 		Data = Data.subtract(bkg_value*np.ones(np.shape(Data))*u.adu,propagate_uncertainties=True,handle_meta='first_found')
 		logging.debug("Background removed from " + ficheiro)
 					
+					
 	if config["CrossTalk"]:
 		logging.debug("Starting CrossTalk correction of " + ficheiro)
 		alfa1 = 0.015
@@ -171,8 +260,17 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria):
 		logging.debug("CosmicRays removed from " + ficheiro)
 		
 	
-						
-	Data.write(diretoria  + '/ImagensReduzidas/' + ficheiro)
+	DirImage = diretoria  + '/ImagensReduzidas/' + ficheiro		
+	Data.write(DirImage)
+	
+	
+	if config["Astrometry"]:
+		resultado = FuncoesReducao.sextractor(DirImage,directory,diretoria + '/SextractorCatalogue/%s.cat'(ficheiro[:-5]))
+		result,status = FuncoesReducao.astrometrytesteComFicheiroSex(diretoria + '/SextractorCatalogue/%s.cat'(ficheiro[:-5]),raw.header,directory + '/AstrometryFiles')
+	
+	
+	
+
 
 
 	if config['GRAPH']:
@@ -203,9 +301,32 @@ def ReadCatalogue(catalog_path,max_magnitude=None,min_magnitude=None,max_variabi
 	if max_variability is not None:
 		catalog = catalog[catalog['variability'] == max_variability]
 	
-	
+	print(type(catalog['ra']))
 	# ~ return SkyCoord(ra=Angle(catalog['ra']), dec=Angle(catalog['dec']))
 	return SkyCoord(ra = Longitude(catalog['ra'], unit = u.deg), dec = np.array(catalog['dec'])*u.deg,frame = 'cirs'), catalog['v_mag']
+
+def ReadTychoCatalogue(catalog_path,max_magnitude=None,min_magnitude=None):
+	catalog = {'RA':[],'DEC':[],'BTMag':[],'VTMag':[]}
+	with open(catalog_path,'r') as text:
+		while True:
+			line = text.readline()
+			if line == '':
+				break
+			else:
+				BTMag = line[110:116].strip()
+				VTMag = line[123:129].strip()
+				
+				if BTMag != '' and VTMag != '':
+					catalog['RA'].append(float(line[152:164].strip()))
+					catalog['DEC'].append(float(line[165:177].strip()))
+					catalog['BTMag'].append(float(BTMag))
+					catalog['VTMag'].append(float(VTMag))
+	catalog['BTMag'] = np.array(catalog['BTMag'])
+	catalog['VTMag'] = np.array(catalog['VTMag'])
+	return SkyCoord(ra = Longitude(catalog['RA'], unit = u.deg), dec = np.array(catalog['DEC'])*u.deg,frame = 'cirs'), catalog['VTMag'], catalog['BTMag']
+	# ~ return catalog
+
+
 
 def find_matching_stars(catalog_stars, image_stars, max_sep=0.5 * u.deg):
     if len(image_stars) == 0:

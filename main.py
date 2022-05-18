@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import astroscrappy
 import threading
+import concurrent.futures
+import psutil
 
 """
 Headers: FILTER, EXPOSURE, TIME,RA,DEC,NAXIS1,NAXIS2
@@ -22,7 +24,7 @@ Headers: FILTER, EXPOSURE, TIME,RA,DEC,NAXIS1,NAXIS2
 """
 
 def Analise(ficheiro,Masters):
-	FuncoesReducao.AnalisarImagem(ficheiro,Masters,logging,config,diretoria)
+	FuncoesReducao.AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory)
 
 
 TempoEntreImagens = 5
@@ -43,6 +45,8 @@ if not os.path.isdir(diretoria):
 	os.mkdir(diretoria + "/ImagensTratadas")
 	os.mkdir(diretoria + "/ImagensReduzidas")
 	os.mkdir(diretoria + "/Masters")
+	os.mkdir(diretoria + "/SextractorCatalogue")
+	os.mkdir(diretoria + "/AstrometryFiles")
 
 
 if type(config['LOGGER']) != int or 0>config['LOGGER'] or 50<config['LOGGER']:
@@ -55,6 +59,8 @@ logger = logging.getLogger()
 FuncoesMaster.CreateMasters(diretoria)
 Masters = FuncoesMaster.SeeMasters(diretoria)
 
+
+threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 10)
 while True:
 	# Enquanto n tem imagens
 	while len(os.listdir(path=diretoria + "/Imagens")) == 0:
@@ -62,7 +68,12 @@ while True:
 		time.sleep(TempoEntreImagens)
 	
 	
-	for ficheiro in os.listdir(path=diretoria + "/Imagens"):
+	for ficheiro in os.listdir(path=diretoria + "/Imagens"):				
 		Path(diretoria + '/Imagens/' + ficheiro).rename(diretoria + '/ImagensTratadas/' + ficheiro)
-		t = threading.Thread(target = Analise,args = (ficheiro,Masters))
-		t.start()
+		threadpool.submit(Analise,ficheiro,Masters)
+
+		# ~ t = threading.Thread(target = Analise,args = (ficheiro,Masters))
+		# ~ t.start()
+		# ~ print('ola')
+
+

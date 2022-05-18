@@ -18,7 +18,6 @@ def CreateMasters(DayDirectory):
 			CreateMaster(FlatFiles,DayDirectory,Filter,'Flat')
 			
 	for Time in Darks:
-		print(Time)
 		if Time not in Masters['Dark']:
 			DFiles = Darks[Time]
 			DarkFiles = []
