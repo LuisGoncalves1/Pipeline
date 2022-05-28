@@ -112,6 +112,8 @@ def astrometrytesteComFicheiroSex(DirCatalogo,header,DirAstro,NameImage):
            '--cpulimit', '120',
            '--scale-low', '1',
            '--scale-high', '5',
+           # ~ '--scale-low', '0.1',
+           # ~ '--scale-high', '1',
            '--scale-units', 'app',
            # ~ '--ra', header['RA'],
            # ~ '--dec', header['DEC'],
@@ -125,6 +127,7 @@ def astrometrytesteComFicheiroSex(DirCatalogo,header,DirAstro,NameImage):
            '--match','none',
            # ~ '--new-fits', DirAstro + NameImage,
            '--radius', '3',
+           # ~ '--radius', '1.6',
            '--overwrite',
            '--dir', DirAstro,
             DirCatalogo
@@ -305,6 +308,21 @@ def ReadCatalogue(catalog_path,max_magnitude=None,min_magnitude=None,max_variabi
 	# ~ return SkyCoord(ra=Angle(catalog['ra']), dec=Angle(catalog['dec']))
 	return SkyCoord(ra = Longitude(catalog['ra'], unit = u.deg), dec = np.array(catalog['dec'])*u.deg,frame = 'cirs'), catalog['v_mag']
 
+def ReadDucati(catalog_path,max_magnitude=None,min_magnitude=None):
+	catalog = {}
+	HDU = fits.open(catalog_path)
+	Data = HDU[1].data
+	Names = Data.names
+	for i in Names:
+		if i == 'RAJ1950':
+			catalog[i] = HMS2deg(Data[i])
+		elif i == 'DEJ1950':
+			catalog[i] = DMS2deg(Data[i])
+		else:
+			catalog[i] = np.array(Data[i])
+
+	return SkyCoord(ra = Longitude(catalog['RAJ1950'], unit = u.deg), dec = np.array(catalog['DEJ1950'])*u.deg,frame = 'cirs'), catalog
+
 def ReadTychoCatalogue(catalog_path,max_magnitude=None,min_magnitude=None):
 	catalog = {'RA':[],'DEC':[],'BTMag':[],'VTMag':[]}
 	with open(catalog_path,'r') as text:
@@ -324,9 +342,34 @@ def ReadTychoCatalogue(catalog_path,max_magnitude=None,min_magnitude=None):
 	catalog['BTMag'] = np.array(catalog['BTMag'])
 	catalog['VTMag'] = np.array(catalog['VTMag'])
 	return SkyCoord(ra = Longitude(catalog['RA'], unit = u.deg), dec = np.array(catalog['DEC'])*u.deg,frame = 'cirs'), catalog['VTMag'], catalog['BTMag']
-	# ~ return catalog
+	
+def HMS2deg(RA):
+	'''
+	Input data: +HH:MM:SS or -HH MM SS, returns decimal degrees correspondent
+	'''
+	degrees = []
+	for value in RA:
+		H = float(value[1:3])
+		M = float(value[4:6])
+		S = float(value[7:10])
+		degree = 360/24 * H + 360/(24*60) * M + 360/(24*60*60) * S
+		degrees.append(degree)
+		
+	return degrees
 
-
+def DMS2deg(DEC):
+	'''
+	Input data: +DD:MM:SS or -DD MM SS, returns decimal degrees correspondent
+	'''
+	degrees = []
+	for value in DEC:
+		D = float(value[1:3])
+		M = float(value[4:6])
+		S = float(value[7:10])
+		degree = D + M/60 + S/3600
+		degrees.append(degree)
+		
+	return degrees
 
 def find_matching_stars(catalog_stars, image_stars, max_sep=0.5 * u.deg):
     if len(image_stars) == 0:

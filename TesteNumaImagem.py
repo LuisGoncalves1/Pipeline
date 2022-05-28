@@ -14,6 +14,21 @@ Ficheiro para testar nas imagens do departamento da defesa com FicheiroSex
 
 ''')
 
+A = time.time()
+
+catalog_path = 'Files/Catalogos/tycho2.dat'
+catalogo,mag,BTMag = FuncoesReducao.ReadTychoCatalogue(catalog_path)
+# ~ catalogo, mag = FuncoesReducao.ReadCatalogue(directory + '/Files/hipparcos.fits')
+# ~ catalogo, outro = FuncoesReducao.ReadDucati('Files/Catalogos/ducati2002.fit')
+print('lido em %s' %(time.time()-A))
+
+
+
+
+
+
+
+B = time.time()
 directory = os.getcwd()
 imagem = '/home/luis/Desktop/imagensMadeiraSV/Reduzidas/MAPA_SURV_4_085283_220417_114004+060023_scan047_02.fit'
 # ~ imagem = '/home/luis/Desktop/Codigos/Pipeline/Files/Imagens/2022-03-20/ImagensReduzidas/1037-293B_001.fits'
@@ -26,10 +41,9 @@ resultado = FuncoesReducao.sextractor(imagem,directory,nomeficheiro + '.cat')
 result,status = FuncoesReducao.astrometrytesteComFicheiroSex(nomeficheiro+ '.cat',raw.header,directory + '/AstrometryDefesa','MAPA_SURV_4_085283_220417_114004+060023_scan047_02')
 
 
-catalogo, mag = FuncoesReducao.ReadCatalogue(directory + '/Files/hipparcos.fits')
 
-# ~ catalog_path = 'Files/catalog.dat'
-# ~ catalogo,mag,BTMag = FuncoesReducao.ReadTychoCatalogue(catalog_path)
+
+
 
 FileWc = directory + '/AstrometryDefesa/' + nomeficheiro + '.wcs'
 FileXY = nomeficheiro + '.cat'
@@ -39,9 +53,7 @@ result, status	= FuncoesReducao.XYToRaDec(FileWc,FileXY,FileOutput)
 Posicoes = fits.open(nomeficheiro)
 Ra,Dec = Posicoes[1].data['RA'],Posicoes[1].data['DEC']
 SexData = FuncoesReducao.ReadSextractorFileFit(nomeficheiro + '.cat')
-X,Y,Mags = SexData['X_IMAGE'], SexData['Y_IMAGE'], SexData['MAG_ISOCOR']
-
-print(SexData['FWHM_IMAGE'].data)
+X,Y,Mags,MagsErro,BackG,fluxo,FWHM,thresh= SexData['X_IMAGE'], SexData['Y_IMAGE'], SexData['MAG_ISOCOR'],SexData['MAGERR_ISOCOR'],SexData['BACKGROUND'],SexData['FLUX_ISOCOR'],SexData['FWHM_IMAGE'],SexData['THRESHOLD']
 
 
 Corr = fits.open(directory + '/AstrometryDefesa/'+ nomeficheiro +'.corr' )
@@ -53,26 +65,23 @@ Ra2,Dec2,X2,Y2,Mags2 = Corr[1].data['field_ra'],Corr[1].data['field_dec'],Corr[1
 stars = SkyCoord(ra = Longitude(Ra, unit = u.deg), dec = np.array(Dec)*u.deg, frame = 'cirs')
 
 
-idx,found = FuncoesReducao.find_matching_stars(stars, catalogo, max_sep=0.02 * u.deg)
+idx,found = FuncoesReducao.find_matching_stars(stars, catalogo, max_sep=0.06 * u.deg)
 EncontradosX,EncontradosY,EncontradosMags = X[found],Y[found],Mags[found]
-
-
 print(idx)
-print('-------------------------------------')
-print('Diferença entre mags, minimizado')
-print(mag[idx]-Mags[found] - min(mag[idx]-Mags[found] ))
-# ~ print(mag[idx].data-Mags[found] - min(mag[idx].data-Mags[found] ))
-print('-------------------------------------')
-print('Mags astronomy, minimizado')
-print(Mags[found] - min(Mags[found]))
-print('-------------------------------------')
-print('Mags catalogo, minimizado')
-print(mag[idx] - min(mag[idx]))
-# ~ print(mag[idx].data - min(mag[idx].data))
+print('feito em %s' %(time.time()-B))
 
 
 
-fig, axes = plt.subplots(1, 3)
+media = np.mean(mag[idx]-Mags[found])
+mediana = np.median(mag[idx]-Mags[found])
+
+diferenca1 = mag[idx]-Mags[found] - media
+diferenca2 = mag[idx]-Mags[found] - mediana
+
+
+
+
+fig, axes = plt.subplots(1, 5)
 vmin,vmax = None,None
 axes[0].imshow(raw,cmap='gray',vmin=vmin or np.nanpercentile(raw, 0.1),vmax=vmax or np.nanpercentile(raw, 99))
 axes[1].imshow(raw,cmap='gray',vmin=vmin or np.nanpercentile(raw, 0.1),vmax=vmax or np.nanpercentile(raw, 99))
@@ -94,5 +103,47 @@ for i in range(len(EncontradosX)):
 	x,y,r = EncontradosX[i],EncontradosY[i],2
 	axes[2].scatter(x, y, r, marker='o', facecolors='none',color='Blue')
 
+axes[3].hist(diferenca1, bins = 10)
+axes[3].set_xlabel('media = %s' %(media))
 
-plt.show()
+
+axes[4].hist(diferenca2, bins = 10)
+axes[4].set_xlabel('mediana = %s' %(mediana))
+
+
+# ~ fig2, axes2 = plt.subplots(1,2)
+# ~ vmin,vmax = None,None
+# ~ axes2[0].scatter(Mags[found],mag[idx])
+# ~ axes2[1].scatter(Mags[found],SNR[found])
+
+# ~ plt.show()
+
+
+
+# ~ print(idx)
+# ~ print('-------------------------------------')
+# ~ print('Diferença entre mags, minimizado')
+# ~ print(mag[idx]-Mags[found] - min(mag[idx]-Mags[found] ))
+# ~ print(mag[idx].data-Mags[found] - min(mag[idx].data-Mags[found] ))
+# ~ print('-------------------------------------')
+# ~ print('Mags astronomy, minimizado')
+# ~ print(Mags[found] - min(Mags[found]))
+# ~ print('-------------------------------------')
+# ~ print('Mags catalogo, minimizado')
+# ~ print(mag[idx] - min(mag[idx]))
+# ~ print(mag[idx].data - min(mag[idx].data))
+
+
+# ~ print(idx)
+# ~ print('-------------------------------------')
+# ~ print('Diferença entre mags')
+# ~ print(diferenca1)
+# ~ print('-------------------------------------')
+# ~ print('Mags astronomy, minimizado')
+# ~ print(Mags[found])
+# ~ print('-------------------------------------')
+# ~ print('Mags catalogo, minimizado')
+# ~ print(mag[idx])
+
+# ~ print(mag[idx].data-Mags[found] - min(mag[idx].data-Mags[found] ))
+# ~ print(mag[idx].data - min(mag[idx].data))
