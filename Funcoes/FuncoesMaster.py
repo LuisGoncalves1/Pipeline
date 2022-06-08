@@ -5,6 +5,11 @@ import ccdproc
 
 
 def CreateMasters(DayDirectory):
+	''' Function to create master files from available Masters and Darks. It saves with exposure
+	and type of filter in name.
+	DayDirectory -> Directory for folder with darks and flats files
+	
+	'''
 	Darks = OrganizeDarks(DayDirectory) # Sees available Darks
 	Flats = os.listdir(DayDirectory + '/Flats') # Sees available Flats
 	Masters = SeeMasters(DayDirectory)	
@@ -23,9 +28,17 @@ def CreateMasters(DayDirectory):
 			DarkFiles = []
 			for i in DFiles:
 				DarkFiles.append(DayDirectory + '/Darks/' + i)
-			CreateMaster(DarkFiles,DayDirectory,Time,'Dark')
+			CreateMaster(DarkFiles,DayDirectory,Time,'Dark')		
 			
 def CreateMaster(Files,DayDirectory,Filter,Type):
+	''' Function to create single master file from set of files.
+	Files -> Array with directory for files to be used 
+	DayDirectory -> Directory for folder with darks and flats files
+	Filter -> Filter used in files, to be used to save in name (B,V,etc...)
+	Type -> Type of master file (Dark,Flat)
+	
+	'''
+	
 	FilesRead = [CCDData.read(X, unit='adu', Format = 'fits') for X in Files]
 	Master = ccdproc.combine(FilesRead,method='median')
 	Master.header['FILTER'] = Filter
@@ -39,7 +52,7 @@ def OrganizeDarks(DayDirectory):
 	''' Returns DarkFiles available in a dictionary of the type:
 	Dic = {100:[Dark100_001.fits,Dark100_002.fits],200:[Dark200_001.fits,Dark200_002.fits]}
 	
-	
+	DayDirectory -> Directory for folder with darks and flats files
 	'''
 	Darks = os.listdir(DayDirectory + '/Darks')
 	times = {}
@@ -56,10 +69,7 @@ def SeeMasters(DayDirectory):
 	''' Returns a dictionary of the type:
 	Dic = {Flat: ['A','B','C']; Dark:['50','70','100','200']}
 	
-	
-	
-	
-	
+	DayDirectory -> Directory for folder with darks and flats files
 	
 	'''
 	MastersFiles = os.listdir(DayDirectory + '/Masters')
@@ -74,6 +84,14 @@ def SeeMasters(DayDirectory):
 	return Masters
 		
 def BestDark(Directory,time,Filter):
+	''' Checks to see whats the best dark to use for a given image, checks filter
+	and closest exposure time
+	Directory -> MasterDarks directory 
+	time -> Exposure time for image
+	Filter -> Filter of image
+	'''
+	
+	
 	files = os.listdir(Directory)
 	files = [B for B in files if B[6:10] == 'Dark' and int(B[10:13]) <= time]
 	# ~ files = [B for B in files if B[6:10] == 'Dark' and B[10] == Filter and int(B[11:14]) <= time]

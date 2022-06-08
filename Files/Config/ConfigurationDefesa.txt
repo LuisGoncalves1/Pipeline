@@ -1,0 +1,27 @@
+# Initial Correction
+
+LOGGER 10
+Catalog tycho2.dat
+
+
+# Reduction Process
+FLAT False
+DARK False
+Filters False
+CrossTalk True
+CosmicRays True
+Background True
+Astrometry True
+
+
+# Visual
+GRAPH False
+
+
+# Astrometry
+cpulimit 120
+scale-low 1
+scale-high 5
+scale-units app
+radius 3
+max_sep 0.2
