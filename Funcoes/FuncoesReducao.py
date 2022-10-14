@@ -60,7 +60,7 @@ def astrometry(DirCatalogo,header,DirAstro,config):
 	       '--x-column', 'X_IMAGE',					# Columns in sextractor 
            '--y-column', 'Y_IMAGE',					# Columns in sextractor
            '--no-remove-lines',
-           '--uniformize', '0',
+           # ~ '--uniformize', '0',
            '--width', str(header['NAXIS1']),    	# Width of image
            '--height', str(header['NAXIS2']),       # Height of image
            '--crpix-center',						# The reference pixel is in the center
@@ -71,6 +71,7 @@ def astrometry(DirCatalogo,header,DirAstro,config):
            '--scale-units', config['scale-units'], 	# In what units are given each scale
            '--ra', header['RA'],					# Center-pixel RA coordinate in HH:MM:SS or degrees
            '--dec', header['DEC'],					# Center-pixel Dec coordinate in DD:MM:SS or degrees
+           '--pixel-error','2',
            '--tweak-order','2',
            '--rdls', 'none',						# none in all files which we do not want, if you want
            '--solved','none',						# any of the files, comment the line
@@ -81,7 +82,6 @@ def astrometry(DirCatalogo,header,DirAstro,config):
            '--radius', config['radius'],			# Radius of the image in degrees (in the diagonal of the image)
            '--overwrite',							# Overwrite if there is already a file with the same name
            '--dir', DirAstro,						# Output directory
-           '--out','/home/luis/Desktop/teste.fits', # Output new file
             DirCatalogo
     ]
     # log cmd executed
@@ -210,34 +210,38 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 	CR (True or False);
 	
 	'''
+	
+	
 	logging.debug("Startins to analise " + ficheiro)										# Logger information
 	Data = CCDData.read(diretoria + "/ImagensTratadas/" + ficheiro, unit = 'adu') 			# Reads Image
 	raw = Data.data.copy()																	# Copys data so it conserves initial image
 	Filter = Data.header['FILTER']															# Gets filter from header
-	# ~ exposure = Data.header['EXPTIME']													# Gets exposure time from header
 	exposure = int(float(Data.header['EXPTIME'].replace(',','')))
 	
+	A = time.time()
 	if config["DARK"]:																		# If DARK is True does dark correction
 		logging.debug("Starting Dark correction of file " + ficheiro)						# Logger information
 		Master = BestDark(diretoria + '/Masters',exposure,Filter)							# Sees what is the best masterdark to apply
 		if Master == []:
-			logging.warning('There are no Darks available of type %s' (Filter))				# IF there is none, it skips over dark correction
-			Data.header['DARK'] = 'False'												# Writes in header
+			logging.warning('There are no Darks available of type ' + Filter)				# IF there is none, it skips over dark correction
+			Data.header['DARK'] = 'False'													# Writes in header
 		else:
 			Master = diretoria + '/Masters/' + Master										# Gets master directory
 			MasterDark = CCDData.read(Master) 												# Reads and then applies master
 			Data = ccdproc.ccd_process(Data, dark_frame=MasterDark,dark_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) * u.s,data_exposure = float(Data.header["EXPOSURE"].replace(',','.')) *u.s)
 			Data.header['DARK'] = 'True'													# Writes in header
 			logging.debug("Finished Dark correction of file " + ficheiro)					# Logger information
-	else:
-		Data.header['DARK'] = 'False'													# Writes in header
+	else:	
+		Data.header['DARK'] = 'False'														# Writes in header
+		
+	A = time.time() - A
 	
-	
+	B = time.time()
 	if config["FLAT"]:
 		logging.debug("Starting Fits correction of file " + ficheiro)						# Logger information
 		if Filter not in Masters['Flat']:
-			logging.warning('There are no Flats available of type %s' (Filter))				# Logger information if there is no flat
-			Data.header['FLAT'] = 'False'												# Writes in header
+			logging.warning('There are no Flats available of type ' + Filter)				# Logger information if there is no flat
+			Data.header['FLAT'] = 'False'													# Writes in header
 		else:
 			Master = diretoria + '/Masters/MasterFlat' + Filter + '.fits'					# Gets master directory
 			MasterFlat = CCDData.read(Master)												# Reads master
@@ -245,8 +249,11 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 			Data.header['FLAT'] = 'True'													# Writes in header
 			logging.debug("Finished Fits correction of file " + ficheiro)					# Logger information
 	else:
-		Data.header['FLAT'] = 'False'													# Writes in header
+		Data.header['FLAT'] = 'False'														# Writes in header
+	
+	B = time.time()-B 													
 				
+	C = time.time()
 	if config["Background"]:
 		logging.debug("Eliminating Background of " + ficheiro)								# Logger information
 		bkg = MeanBackground(SigmaClip(sigma=3.))
@@ -255,12 +262,15 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 		logging.debug("Background removed from " + ficheiro)								# Logger information
 		Data.header['BG'] = 'True'															# Writes in header
 	else:
-		Data.header['BG'] = 'False'														# Writes in header
-										
+		Data.header['BG'] = 'False'															# Writes in header
+	
+	C = time.time() - C											
+	
+	D = time.time()					
 	if config["CrossTalk"]:																	# Stars crostalk correction if enabled
 		logging.debug("Starting CrossTalk correction of " + ficheiro)						# Logger information
-		alfa1 = 0.015																		# Parameters for correction
-		alfa2 = 0.008
+		alfa1 = config['alfa1']																# Parameters for correction
+		alfa2 = config['alfa2']
 		convolution_kernel = np.array([[0, alfa1, 0], 										# Deconvolution kernel for cross-talk correction
 									   [alfa1, 1-4*alfa1, alfa1], 
 									   [0, alfa1, 0]])
@@ -270,7 +280,9 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 		Data.header['CT'] = 'True'															# Writes in header
 	else:
 		Data.header['CT'] = 'False'															# Writes in header
-
+	D = time.time()-D
+	
+	E = time.time()
 	if config["CosmicRays"]:
 		logging.debug("Starting CosmicRays Correction of " + ficheiro)						# Logger information
 		crmask, Data.data = astroscrappy.detect_cosmics(Data.data, inmask = None, sepmed = False, cleantype='medmask', fsmode = 'median', verbose=False)  #deteta os raios cósmicos numa matriz numpy
@@ -278,37 +290,46 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 		Data.header['CR'] = 'True'															# Writes in header
 	else:
 		Data.header['CR'] = 'False'														# Writes in header
-		
+	E = time.time() - E
 	
 	DirImage = diretoria  + '/ImagensReduzidas/' + ficheiro		
 	Data.write(DirImage)
 	
-
 	if config["Astrometry"]:
 		#Runs sextractor on reduced image and produces sextractor catalogue
 		logging.debug("Starting Sextractor on " + ficheiro)
-		resultado = FuncoesReducao.sextractor(DirImage,directory,diretoria + '/SextractorCatalogue/%s.cat'(ficheiro[:-5]))     
-		
+		SexFile = diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'.cat'
+		SexTime = time.time()
+		resultado = sextractor(DirImage,directory,SexFile)     
+		SexTime = time.time() - SexTime
 		
 		#Runs astrometry with sextractor catalogue and outputs in astrometry folder (corr,wcs,xyls) files
 		logging.debug("Starting Astrometry on " + ficheiro)
-		result,status = FuncoesReducao.astrometry(diretoria + '/SextractorCatalogue/%s.cat'(ficheiro[:-5]),raw.header,directory + '/AstrometryFiles',config) 
-	
+		AstTime = time.time()
+		result,status = astrometry(diretoria + '/SextractorCatalogue/' + ficheiro[:-5] + '.cat',Data.header,diretoria + '/AstrometryFiles',config) 
+		AstTime = time.time() - AstTime
 		
+		#Transforms from XY to RaDec with WCS information from astrometry
 		nomeficheiro = ficheiro.split('/')[-1].split('.')[0]							# Saves name of file (removes rest of extension)
-		FileWc = directory + '/AstrometryDefesa/' + nomeficheiro + '.wcs'				# Gets directory : WCS file created from astrometry 
-		FileXY = nomeficheiro + '.cat'													# Gets directory : catalogue created from sextractor
-		FileOutput = nomeficheiro														# Output file for calculation of RaDec coordinate of all stars
-		result, status	= FuncoesReducao.XYToRaDec(FileWc,FileXY,FileOutput)			# Calculates RaDec positions for all stars obtained from sextractor
+		FileWc = diretoria + '/AstrometryDefesa/' + nomeficheiro + '.wcs'				# Gets directory : WCS file created from astrometry 
+		FileXY = diretoria + '/SextractorCatalogue/' + nomeficheiro + '.cat'													# Gets directory : catalogue created from sextractor
+		FileOutput = diretoria + '/AstrometryFiles/' + nomeficheiro														# Output file for calculation of RaDec coordinate of all stars
+		TransfTime = time.time()
+		result, status	= XYToRaDec(FileWc,FileXY,FileOutput)			# Calculates RaDec positions for all stars obtained from sextractor
+		TransfTime = time.time() - TransfTime
 
-		Posicoes = fits.open(nomeficheiro)												# Gets positions calculated
+		#Gets the information from the sextractor file and the calculated positions
+		Posicoes = fits.open(FileOutput)												# Gets positions calculated
 		Ra,Dec = Posicoes[1].data['RA'],Posicoes[1].data['DEC']							# Saves RaDec positions
-		SexData = FuncoesReducao.ReadSextractorFileFit(nomeficheiro + '.cat')			# Reads sextractor file obtained in the beggining and saves desired values
+		SexData = FuncoesReducao.ReadSextractorFileFit(SexFile)			# Reads sextractor file obtained in the beggining and saves desired values
 		X,Y,Mags,MagsErro,BackG,fluxo,FWHM,thresh= SexData['X_IMAGE'], SexData['Y_IMAGE'], SexData['MAG_ISOCOR'],SexData['MAGERR_ISOCOR'],SexData['BACKGROUND'],SexData['FLUX_ISOCOR'],SexData['FWHM_IMAGE'],SexData['THRESHOLD']
-
+		
+		#Matches the objects found and the catalogue
 		stars = SkyCoord(ra = Longitude(Ra, unit = u.deg), dec = np.array(Dec)*u.deg, frame = 'cirs')  				# Creates SkyCoord object with RaDec positions obtained (needed for matching)
 		logging.debug("Finding match between catalog stars and detected objects in image " + ficheiro)
+		MatchTime = time.time()
 		idx,found = FuncoesReducao.find_matching_stars(stars, catalogo, max_sep=0.06 * u.deg) 						# Starts matching between these stars and catalogue stars
+		MatchTime = time.time() - MatchTime
 		EncontradosX,EncontradosY,EncontradosMags = X[found],Y[found],Mags[found] 									#Saves X,Y and Mags positions found
 		logging.debug("found " + len(EncontradosX) + " catalog objects in image " + ficheiro)
 		
@@ -324,7 +345,19 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 		ax[1].set_title('Imagem Final')
 		ax[1].imshow(Data.data,cmap='gray',vmin=vmin or np.nanpercentile(Data.data, 0.1),vmax=vmax or np.nanpercentile(Data.data, 99))
 		plt.show() 
+	
+	logging.info("Tempos de :" + ficheiro)
+	logging.info('TempoDark: {:.2f}'.format(A))
+	logging.info('TempoFlat: {:.2f}'.format(B))
+	logging.info('TempoBackGround: {:.2f}'.format(C))
+	logging.info('TempoCrossTalk: {:.2f}'.format(D))
+	logging.info('TempoCosmicRays: {:.2f}'.format(E))
+	logging.info('TempoSextractor: {:.2f}'.format(SexTime))
+	# ~ logging.info('TempoAstrometry: {:.2f}'.format(AstTime))
+	# ~ logging.info('TempoTransformar: {:.2f}'.format(TransfTime))
+	# ~ logging.info('TempoMatch: {:.2f}'.format(MatchTime))
 
+	
 def SeeFitsTables(filedir):
 	hdul = fits.open(filedir)
 	return hdul[1].data
@@ -450,6 +483,10 @@ def find_matching_stars(catalog_stars, image_stars, max_sep=0.5 * u.deg):
 	catalog_stars -> SkyCoord object with catalogue stars coordinates
 	image_stars -> SkyCoord object with coordinates of objects detected in image 
 	max_sep -> maximum separation to be accepted for closest match (otherwise it is not found)
+	
+	Returns 
+	idx: index of image stars that were found
+	mask: True/False matrix matching the image_stars array
 	'''
 	
 	

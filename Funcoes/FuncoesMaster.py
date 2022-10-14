@@ -1,18 +1,28 @@
 import os
 from astropy.nddata import CCDData
 import ccdproc
+import astropy.units as u
 
 
 
-def CreateMasters(DayDirectory):
-	''' Function to create master files from available Masters and Darks. It saves with exposure
+def CreateMasters(DayDirectory,config):
+	''' Function to create master files from available Flats and Darks. It saves with exposure
 	and type of filter in name.
 	DayDirectory -> Directory for folder with darks and flats files
+	config -> Dictionary with configurations from Config File
 	
 	'''
 	Darks = OrganizeDarks(DayDirectory) # Sees available Darks
 	Flats = os.listdir(DayDirectory + '/Flats') # Sees available Flats
 	Masters = SeeMasters(DayDirectory)	
+
+	for Time in Darks:
+		if Time not in Masters['Dark']:
+			DFiles = Darks[Time]
+			DarkFiles = []
+			for i in DFiles:
+				DarkFiles.append(DayDirectory + '/Darks/' + i)
+			CreateMaster(DarkFiles,DayDirectory,Time,'Dark',config)	
 
 	for Filter in Flats:
 		if Filter not in Masters['Flat']:
@@ -20,33 +30,37 @@ def CreateMasters(DayDirectory):
 			FlatFiles =[]
 			for i in FFiles:
 				FlatFiles.append(DayDirectory + '/Flats/' + Filter + '/' + i)
-			CreateMaster(FlatFiles,DayDirectory,Filter,'Flat')
+			CreateMaster(FlatFiles,DayDirectory,Filter,'Flat',config)
+				
 			
-	for Time in Darks:
-		if Time not in Masters['Dark']:
-			DFiles = Darks[Time]
-			DarkFiles = []
-			for i in DFiles:
-				DarkFiles.append(DayDirectory + '/Darks/' + i)
-			CreateMaster(DarkFiles,DayDirectory,Time,'Dark')		
-			
-def CreateMaster(Files,DayDirectory,Filter,Type):
+def CreateMaster(Files,DayDirectory,Filter,Type,config):
 	''' Function to create single master file from set of files.
 	Files -> Array with directory for files to be used 
 	DayDirectory -> Directory for folder with darks and flats files
-	Filter -> Filter used in files, to be used to save in name (B,V,etc...)
+	Filter -> Filter used in files, to be used to save in name (B,V,etc... or Time in dark case)
 	Type -> Type of master file (Dark,Flat)
+	config -> Dictionary with configurations from Config File
 	
 	'''
-	
 	FilesRead = [CCDData.read(X, unit='adu', Format = 'fits') for X in Files]
 	Master = ccdproc.combine(FilesRead,method='median')
 	Master.header['FILTER'] = Filter
-	
+	if (Type == 'Flat') & config['FLATdark']:
+		Dark = BestDark(DayDirectory + '/Masters',float(Master.header['EXPTIME'].replace(',','.')))							# Sees what is the best masterdark to apply
+		if Dark == []:
+			Master.header['DARK'] = 'False'												# Writes in header
+		else:
+			Dark = DayDirectory + '/Masters/' + Dark										# Gets Dark directory
+			MasterDark = CCDData.read(Dark) 												# Reads and then applies master
+			Master = ccdproc.ccd_process(Master, dark_frame=MasterDark,dark_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) * u.s,data_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) *u.s)
+			Master.header['DARK'] = 'True'													# Writes in header
+		
 	MasterName = "Master%s%s.fits" % (Type, Filter)
 	
 	Master.write(DayDirectory + '/Masters/' + MasterName)
 	return Master
+	
+	
 		
 def OrganizeDarks(DayDirectory):
 	''' Returns DarkFiles available in a dictionary of the type:
@@ -83,14 +97,13 @@ def SeeMasters(DayDirectory):
 						
 	return Masters
 		
-def BestDark(Directory,time,Filter):
+def BestDark(Directory,time):
 	''' Checks to see whats the best dark to use for a given image, checks filter
 	and closest exposure time
 	Directory -> MasterDarks directory 
-	time -> Exposure time for image
-	Filter -> Filter of image
+	time -> Exposure time for image (float)
+	Filter -> Filter of image (str)
 	'''
-	
 	
 	files = os.listdir(Directory)
 	files = [B for B in files if B[6:10] == 'Dark' and int(B[10:13]) <= time]
