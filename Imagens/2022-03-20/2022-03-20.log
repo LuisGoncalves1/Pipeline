@@ -1,0 +1,21 @@
+DEBUG 2022-10-13 16:10:42,787 : Starting create Master Files
+WARNING 2022-10-13 16:10:42,803 : FITSFixedWarning: EPOCH = '2000.0 ' / Epoca 
+a floating-point value was expected.
+INFO 2022-10-13 16:11:10,814 : Tempos para criarMasters : 28.03
+DEBUG 2022-10-13 16:11:10,814 : Master Files Created
+DEBUG 2022-10-13 16:11:10,814 : Starting to read catalogue
+INFO 2022-10-13 16:12:06,961 : Tempos para ler catalogo : 56.15
+DEBUG 2022-10-13 16:12:06,962 : Catalogue Read
+DEBUG 2022-10-13 16:12:06,962 : Startins to analise 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:06,974 : Starting Dark correction of file 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:07,004 : Finished Dark correction of file 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:07,013 : Starting Fits correction of file 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:07,068 : Finished Fits correction of file 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:07,068 : Eliminating Background of 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:07,552 : Background removed from 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:07,552 : Starting CrossTalk correction of 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:07,563 : Crosstalk corrected from 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:07,564 : Starting CosmicRays Correction of 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:16,564 : CosmicRays removed from 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:16,585 : Starting Sextractor on 1037-293B_001.fits
+DEBUG 2022-10-13 16:12:16,758 : Starting Astrometry on 1037-293B_001.fits
