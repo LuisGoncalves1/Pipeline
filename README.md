@@ -2,6 +2,7 @@
 
 Meter: Funcionamento
 
+Files to Create: default.sex; default.psfex; 
 
 
 
