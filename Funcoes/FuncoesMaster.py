@@ -31,8 +31,7 @@ def CreateMasters(DayDirectory,config):
 			for i in FFiles:
 				FlatFiles.append(DayDirectory + '/Flats/' + Filter + '/' + i)
 			CreateMaster(FlatFiles,DayDirectory,Filter,'Flat',config)
-				
-			
+							
 def CreateMaster(Files,DayDirectory,Filter,Type,config):
 	''' Function to create single master file from set of files.
 	Files -> Array with directory for files to be used 
@@ -59,8 +58,6 @@ def CreateMaster(Files,DayDirectory,Filter,Type,config):
 	
 	Master.write(DayDirectory + '/Masters/' + MasterName)
 	return Master
-	
-	
 		
 def OrganizeDarks(DayDirectory):
 	''' Returns DarkFiles available in a dictionary of the type:

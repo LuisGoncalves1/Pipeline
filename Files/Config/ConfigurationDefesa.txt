@@ -4,11 +4,16 @@ LOGGER 10
 Catalog tycho2.dat
 
 
+
 # Reduction Process
-FLAT False
 DARK False
+FLATdark True
+FLAT False
+GAIN True
 Filters False
 CrossTalk True
+alfa1 0.015
+alfa2 0.008
 CosmicRays True
 Background True
 Astrometry True
@@ -19,9 +24,11 @@ GRAPH False
 
 
 # Astrometry
-cpulimit 120
-scale-low 1
-scale-high 5
+SexConfig defaultDEFESA.sex
+PSFexConfig defaultBRUNO.psfex
+cpulimit 20
+scale-low 3
+scale-high 7
 scale-units app
 radius 3
 max_sep 0.2

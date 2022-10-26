@@ -8,8 +8,8 @@ FLUX_ISOCOR              Corrected isophotal flux                               
 #FLUXERR_ISOCOR           RMS error for corrected isophotal flux                    [count]
 MAG_ISOCOR               Corrected isophotal magnitude                             [mag]
 MAGERR_ISOCOR            RMS error for corrected isophotal magnitude               [mag]
-#FLUX_APER                Flux vector within fixed circular aperture(s)             [count]
-#FLUXERR_APER             RMS error vector for aperture flux(es)                    [count]
+FLUX_APER(1)                
+FLUXERR_APER(1)            
 #MAG_APER                 Fixed aperture magnitude vector                           [mag]
 #MAGERR_APER              RMS error vector for fixed aperture mag.                  [mag]
 #FLUX_AUTO                Flux within a Kron-like elliptical aperture               [count]
@@ -182,7 +182,7 @@ Y_IMAGE                  Object position along y                                
 #ISO5                     Isophotal area at level 5                                 [pixel**2]
 #ISO6                     Isophotal area at level 6                                 [pixel**2]
 #ISO7                     Isophotal area at level 7                                 [pixel**2]
-#FLAGS                    Extraction flags                                         
+FLAGS                    Extraction flags                                         
 #FLAGS_WEIGHT             Weighted extraction flags                                
 #FLAGS_WIN                Flags for WINdowed parameters                            
 #IMAFLAGS_ISO             FLAG-image flags OR'ed over the iso. profile             
@@ -191,7 +191,7 @@ Y_IMAGE                  Object position along y                                
 #NLOWDWEIGHT_ISO          Nb of pixels with low det. weight over the iso. profile  
 FWHM_IMAGE               FWHM assuming a gaussian core                             [pixel]
 #FWHM_WORLD               FWHM assuming a gaussian core                             [deg]
-#ELONGATION               A_IMAGE/B_IMAGE                                          
+ELONGATION               A_IMAGE/B_IMAGE                                          
 #ELLIPTICITY              1 - B_IMAGE/A_IMAGE                                      
 #POLAR_IMAGE              (A_IMAGE^2 - B_IMAGE^2)/(A_IMAGE^2 + B_IMAGE^2)          
 #POLAR_WORLD              (A_WORLD^2 - B_WORLD^2)/(A_WORLD^2 + B_WORLD^2)          
@@ -207,7 +207,7 @@ FWHM_IMAGE               FWHM assuming a gaussian core                          
 #FLUX_GROWTHSTEP          Step for growth-curves                                    [pixel]
 #MAG_GROWTH               Cumulated magnitude growth-curve                          [mag]
 #MAG_GROWTHSTEP           Step for growth-curves                                    [pixel]
-#FLUX_RADIUS              Fraction-of-light radii                                   [pixel]
+FLUX_RADIUS              
 #XPSF_IMAGE               X coordinate from PSF-fitting                             [pixel]
 #YPSF_IMAGE               Y coordinate from PSF-fitting                             [pixel]
 #XPSF_WORLD               PSF position along world x axis                           [deg]
@@ -395,6 +395,7 @@ FWHM_IMAGE               FWHM assuming a gaussian core                          
 #DISK_THETAERR_IMAGE      RMS error on fitted disk position angle                   [deg]
 #DISK_THETA_WORLD         Disk position angle (CCW/world-x)                         [deg]
 #DISK_THETAERR_WORLD      RMS error on disk position angle                          [deg]
+SNR_WIN
 #DISK_THETA_SKY           Disk position angle (east of north, native)               [deg]
 #DISK_THETA_J2000         Disk position angle (east of north, J2000)                [deg]
 #DISK_THETA_B1950         Disk position angle (east of north, B1950)                [deg]

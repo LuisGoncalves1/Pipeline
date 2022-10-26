@@ -13,7 +13,6 @@ import time
 import matplotlib.pyplot as plt
 from pathlib import Path
 import astroscrappy
-import threading
 import concurrent.futures
 import psutil
 
@@ -76,15 +75,16 @@ logging.debug("Catalogue Read")
 
 
 
-threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 30)
-N_Imagens = len(os.listdir(path = diretoria + "/Imagens"))
+threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 2)
 A = time.time()
 while True:
 	# Enquanto n tem imagens
 	while len(os.listdir(path=diretoria + "/Imagens")) == 0:
-		if len(os.listdir(path=diretoria + "/ImagensReduzidas")) == N_Imagens:
-			logging.info("Tempos para tratar todas imagens : {:.2f}".format(time.time()-A) )		
-		print('Não existem mais dados deste dia')
+		print("ativos: " + str(len(threadpool._threads)))
+		print("queue: " + str(threadpool._work_queue.qsize()))
+			# ~ logging.info("Tempos para tratar todas imagens : {:.2f}".format(time.time()-A) )		
+		if threadpool._work_queue.qsize() + len(threadpool._threads) == 0:	
+			print('Não existem mais dados deste dia')
 		time.sleep(TempoEntreImagens)
 		
 		
@@ -93,6 +93,3 @@ while True:
 		threadpool.submit(Analise,ficheiro,Masters)
 
 
-
-# ~ t = threading.Thread(target = Analise,args = (ficheiro,Masters))
-# ~ t.start()
