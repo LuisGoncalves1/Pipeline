@@ -37,7 +37,7 @@ FLUXERR_APER(1)
 #KRON_RADIUS              Kron apertures in units of A or B                        
 #PETRO_RADIUS             Petrosian apertures in units of A or B                   
 BACKGROUND               Background at centroid position                           [count]
-THRESHOLD                Detection threshold above background                      [count]
+#THRESHOLD                Detection threshold above background                      [count]
 #FLUX_MAX                 Peak flux above background                                [count]
 #ISOAREA_IMAGE            Isophotal area above Analysis threshold                   [pixel**2]
 #ISOAREAF_IMAGE           Isophotal area (filtered) above Detection threshold       [pixel**2]
@@ -395,7 +395,7 @@ FLUX_RADIUS
 #DISK_THETAERR_IMAGE      RMS error on fitted disk position angle                   [deg]
 #DISK_THETA_WORLD         Disk position angle (CCW/world-x)                         [deg]
 #DISK_THETAERR_WORLD      RMS error on disk position angle                          [deg]
-SNR_WIN
 #DISK_THETA_SKY           Disk position angle (east of north, native)               [deg]
 #DISK_THETA_J2000         Disk position angle (east of north, J2000)                [deg]
 #DISK_THETA_B1950         Disk position angle (east of north, B1950)                [deg]
+SNR_WIN

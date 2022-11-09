@@ -18,15 +18,21 @@ import itertools
 from astropy.io import fits
 from astropy.table import Table
 from astropy.coordinates import SkyCoord, Longitude,  Angle, match_coordinates_sky
-# ~ from FuncoesMaster import BestDark
 
 
 
 def sextractor(image,directory,catin,catout,cattype,VIGNET=None):
 	''' Function to run sextractor on an image and output catalogue file
-	image -> image directory to give to sextractor
-	directory -> directory of the pipeline folder
-	catout -> directory and name of the output catalog with all information chosen
+	INPUTS:
+	image -> image directory to give to sextractor 														(str)
+	directory -> directory of the Pipeline folder														(str)
+	catin -> Configuration catalog used for Sextractor													(str)
+	catout -> directory and name of the output catalog													(str)
+	cattype -> Type of output catalog, FITS_1.0 for normal, and FITS_LDAC for PSFEX						(str)
+	VINGET -> Size of array to save from each image, for PSFEX											(int)
+	
+	OUTPUTS:
+	Writes a sextractor catalog at the day Sextractor folder with the same name as the original image
 	
 	'''
 	
@@ -37,34 +43,45 @@ def sextractor(image,directory,catin,catout,cattype,VIGNET=None):
 	cmd['source-extractor'] = image									# Chooses the image directory as the image to analyse
 	cmd['-c'] = SexDir + catin										# Chooses the sextractor catalogue as the default in the pipeline folder
 	cmd['-CATALOG_NAME'] =  catout									# Chooses the catalogue output as the catout given in the function
-	cmd['-PARAMETERS_NAME'] = SexDir + 'default.param'				# Chooses the needed files from the sextractor folder
+	# ~ cmd['-PARAMETERS_NAME'] = SexDir + 'default.param'				# Chooses the needed files from the sextractor folder
 	cmd['-FILTER_NAME'] = SexDir + 'default.conv'
 	cmd['-WEIGHT_IMAGE'] = SexDir + 'weight.fits'
 	cmd['-CATALOG_TYPE'] = cattype
 	
 	if cattype == 'FITS_LDAC':
-		with open(SexDir + 'default.param', 'a') as myfile:
-			myfile.write('VIGNET{}\n'.format((VIGNET,VIGNET)))
+		cmd['-PARAMETERS_NAME'] = SexDir + 'default1.param'				# Chooses the needed files from the sextractor folder
+	else:
+		cmd['-PARAMETERS_NAME'] = SexDir + 'default.param'				# Chooses the needed files from the sextractor folder
+		
+		
+		
+	# ~ if cattype == 'FITS_LDAC':
+		# ~ with open(SexDir + 'default.param', 'a') as myfile:
+			# ~ myfile.write('VIGNET{}\n'.format((VIGNET,VIGNET)))
 	
 	list_cmd = list(itertools.chain.from_iterable(list(cmd.items()))) # Compacts the cmd dictionary created so it can be run through terminal
 	result = subprocess.run(list_cmd, capture_output=True) 			  # Runs the program in terminal and outputs the result and status (0 = good, 255 = bad)
 	status = result.returncode
 	
-	if cattype == 'FITS_LDAC':
-		with open(SexDir + 'default.param', '+r') as myfile:
-			lines = myfile.readlines()
-			myfile.seek(0)
-			myfile.truncate()
-			myfile.writelines(lines[:-1])
+	# ~ if cattype == 'FITS_LDAC':
+		# ~ with open(SexDir + 'default.param', '+r') as myfile:
+			# ~ lines = myfile.readlines()
+			# ~ myfile.seek(0)
+			# ~ myfile.truncate()
+			# ~ myfile.writelines(lines[:-1])
 			
 	return result
 	    		
 def astrometry(DirCatalogo,header,DirAstro,config):
 	''' Function to run astrometry.net on an image and output created files
-	DirCatalogo -> directory where the image to be analysed is, in this case its an sextractor catalogue with X,Y positions
-	Header -> Image header, to know information such as width,height and center-pixel Ra and Dec
-	DirAstro -> Directory where we are going to save the output files
-	config -> Config file for the chosen telescope, with informations regarding the parameters to be used to run astrometry
+	INPUTS:
+	DirCatalogo -> directory of the sextractor catalogue with X,Y positions from the desired image								(str)
+	Header -> Image header, to know information such as width, height and center-pixel Ra and Dec								(str)
+	DirAstro -> Directory where we are going to save the output files															(str)
+	config -> Config file for the chosen telescope, with informations regarding the parameters to be used to run astrometry		(str)
+	
+	OUTPUTS:
+	Writes a .wcs and a .xyls file on astrometry, with the same name as the original image
 	'''
 	
 	
@@ -72,7 +89,7 @@ def astrometry(DirCatalogo,header,DirAstro,config):
 	       '--x-column', 'X_IMAGE',					# Columns in sextractor 
            '--y-column', 'Y_IMAGE',					# Columns in sextractor
            '--no-remove-lines',
-           # ~ '--uniformize', '0',
+           '--uniformize', '0',
            '--width', str(header['NAXIS1']),    	# Width of image
            '--height', str(header['NAXIS2']),       # Height of image
            '--crpix-center',						# The reference pixel is in the center
@@ -85,7 +102,7 @@ def astrometry(DirCatalogo,header,DirAstro,config):
            '--dec', header['DEC'].replace(' ',':'),					# Center-pixel Dec coordinate in DD:MM:SS or degrees
            '--pixel-error','2',
            '--tweak-order','2',
-           '--rdls', 'none',						# none in all files which we do not want, if you want
+           # ~ '--rdls', 'none',						# none in all files which we do not want, if you want
            '--solved','none',						# any of the files, comment the line
            '--corr','none',
            '--axy','none',
@@ -106,8 +123,10 @@ def astrometry(DirCatalogo,header,DirAstro,config):
 def psfex(catin,file_config):
 	cmd = ['psfex', catin, '-c', file_config] 
 	cmd_str = ' '.join(cmd) 						  # Compacts the cmd dictionary created so it can be run through terminal
+	print(cmd_str)
 	
 	result = subprocess.run(cmd, capture_output=True) # Runs psfex with given parameters
+	print(result)
 	status = result.returncode						  # Returns result, status = 0 if good and 255 if bad
 	return result, status	
       			      		      		
@@ -115,9 +134,9 @@ def XYToRaDec(FileWc,FileXY,FileOutput):
 	''' Function created to transform XY positions of an image into RaDec coordinates
 	using WCS created by previous astrometry run. IT uses an astrometry function wcs-xy2rd.
 	
-	FileWc -> directory of WCS file of astrometry for corresponding image
-	FileXY -> directory of XY coordinates file given by sextractor
-	FileOutput -> directory of output file to write with Ra Dec coordinates of corresponding XY coordinates
+	FileWc -> directory of WCS file of astrometry for corresponding image										(str)
+	FileXY -> directory of XY coordinates file given by sextractor												(str)
+	FileOutput -> directory of output file to write with Ra Dec coordinates of corresponding XY coordinates		(str)
 	'''
 	
 	
@@ -133,11 +152,40 @@ def XYToRaDec(FileWc,FileXY,FileOutput):
 	result = subprocess.run(cmd, capture_output=True)
 	status = result.returncode  						# Returns result, status = 0 if good and 255 if bad
 	return result, status	           		
-	      		
+	      
+def RaDecToXY(FileWc,FileRaDec,FileOutput):
+	cmd = ['wcs-rd2xy', 
+		'-w',FileWc, 									# WCS file directory
+		'-i', FileRaDec,									# Sextractor catalogue with XY positions file directory
+		'-o', FileOutput]								# Output file directory
+		
+	cmd_str = ' '.join(cmd)								# Compacts the cmd dictionary created so it can be run through terminal
+	
+	result = subprocess.run(cmd, capture_output=True)
+	status = result.returncode  						# Returns result, status = 0 if good and 255 if bad
+	return result, status
+
+def CreateRDLSFile(Ra,Dec,FileName):
+	''' Function that changes the data from the RLDS file to a set of (Ra,Dec) coordinates.
+	INPUTES:
+	Ra -> array with Ra coordinates
+	Dec -> array with Dec coordinates
+	FileName -> Name of rdls file
+	
+	'''
+	with fits.open(FileName, mode = 'update') as A:
+		Dados = A[1].data
+		
+		x = np.array(Ra,Dec,dtype = [('RA', '<f8'),('DEC','<f8')])
+		Dados = Dados[Dados['RA'] > 180]
+		Dados = np.append(Dados,x)
+
+		A.close()
+		      		
 def ReadSextractorFileTxt(SexFile):
 	''' Function created to read catalogue created from sextractor in txt type. It outputs 
 	a dictionary with the information related to each column as values of keys
-	SexFile -> Directory of sextractor fits catalogue
+	SexFile -> Directory of sextractor fits catalogue							(str)
 	
 	'''
 	
@@ -163,7 +211,7 @@ def ReadSextractorFileTxt(SexFile):
 def ReadSextractorFileFit(SexFile):
 	''' Function created to read catalogue created from sextractor in fits type. It outputs 
 	a dictionary with the information related to each column as values of keys
-	SexFile -> Directory of sextractor fits catalogue
+	SexFile -> Directory of sextractor fits catalogue							(str)
 	
 	'''
 	
@@ -181,7 +229,7 @@ def ReadSextractorFileFit(SexFile):
 							
 def str2bool(valor):
 	''' Function to transform a string boolean into a boolean, if possible. 
-	valor -> string to be converted 
+	valor -> string to be converted 		(str)
 	'''
 	if valor == "True":
 		return True
@@ -193,7 +241,7 @@ def str2bool(valor):
 def ReadPipelineConfig(ficheiro):
 	''' Function to read pipeline config files. It skips over blank lines and lines which start with an #. 
 	Returns in the form of a dictionary with properties as keys and True/False or numbers as values
-	ficheiro -> Config file directory
+	ficheiro -> Config file directory							(str)
 	
 	'''
 	
@@ -212,22 +260,46 @@ def ReadPipelineConfig(ficheiro):
 				break
 	return dic
 
+def BestDark(Directory,time):
+	''' Checks to see whats the best dark to use for a given image, checks filter
+	and closest exposure time
+	Directory -> MasterDarks directory 					(str)
+	time -> Exposure time for image 					(float)
+	'''
+	files = os.listdir(Directory)
+	files = [B for B in files if B[6:10] == 'Dark' and int(B[10:13]) <= time]
+	# ~ files = [B for B in files if B[6:10] == 'Dark' and B[10] == Filter and int(B[11:14]) <= time]
+	times = [B[11:14] for B in files]
+	if times == []:
+		return []
+	else:
+		return files[times.index(max(times))]
+
 def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,mag):
 	''' Main function to analise an image. 
-	ficheiro -> Directory of image to analise
-	Masters -> Dictionary if available masters
-	logging -> Logger
-	config -> Telescope config dictionary
-	diretoria -> Images directory for that day
-	directory -> Pipeline directory
-	catalogo -> Catalogue to be used for astrometry in SkyCoord type
-	mag -> Corrrespoinding magnitudes for catalogo positions
+	Image reduction -> Sextractor twice -> PSFEX? -> Astrometry -> Comparison with catalog -> End
+	ficheiro -> Directory of image to analise									(str)
+	Masters -> Dictionary if available masters									(dict)
+	logging -> Logger															(log)
+	config -> Telescope config dictionary										(str)
+	diretoria -> Images directory for that day									(str)
+	directory -> Pipeline directory												(str)
+	catalogo -> Catalogue to be used for astrometry in SkyCoord type			(numpy.list)
+	mag -> Corrrespoinding magnitudes for catalogo positions					(numpy.list)
+	
+	Needs in header:
+	EXPTIME/EXPOSURE
+	FILTER
+	ǴAIN
+	
+	
 	
 	Writes in header: DARK (True or False); 
 	FLAT (True or False);
 	BG (True or False);
 	CT (True of False);
 	CR (True or False);
+	
 	
 	'''
 	
@@ -236,14 +308,13 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 	Data = CCDData.read(diretoria + "/ImagensTratadas/" + ficheiro, unit = 'adu') 			# Reads Image
 	raw = Data.data.copy()																	# Copys data so it conserves initial image
 	Filter = Data.header['FILTER']															# Gets filter from header
-	exposure = int(float(Data.header['EXPTIME'].replace(',','')))
+	# ~ exposure = float(Data.header['EXPTIME'].replace(',','.'))							# Bruno
+	exposure = float(Data.header['EXPTIME'])												# Defesa
 	
 	A = time.time()
 	if config["DARK"]:																		# If DARK is True does dark correction
 		logging.debug("Starting Dark correction of file " + ficheiro)						# Logger information
-		print('tal')
-		Master = BestDark(diretoria + '/Masters',exposure,Filter)							# Sees what is the best masterdark to apply
-		print('ola')
+		Master = BestDark(diretoria + '/Masters',exposure)									# Sees what is the best masterdark to apply
 		if Master == []:
 			logging.warning('There are no Darks available of type ' + Filter)				# IF there is none, it skips over dark correction
 			Data.header['DARK'] = 'False'													# Writes in header
@@ -295,12 +366,11 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 	D = time.time()					
 	if config["CrossTalk"]:																	# Stars crostalk correction if enabled
 		logging.debug("Starting CrossTalk correction of " + ficheiro)						# Logger information
-		alfa1 = config['alfa1']																# Parameters for correction
-		alfa2 = config['alfa2']
+		alfa1 = float(config['alfa1'])																# Parameters for correction
+		alfa2 = float(config['alfa2'])
 		convolution_kernel = np.array([[0, alfa1, 0], 										# Deconvolution kernel for cross-talk correction
 									   [alfa1, 1-4*alfa1, alfa1], 
 									   [0, alfa1, 0]])
-
 		Data.data = cv2.filter2D(np.array(Data.data), -1, convolution_kernel)				# Applies kernel to image
 		logging.debug("Crosstalk corrected from " + ficheiro)
 		Data.header['CT'] = 'True'															# Writes in header
@@ -318,26 +388,34 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 		Data.header['CR'] = 'False'															# Writes in header
 	E = time.time() - E
 	
-	DirImage = diretoria  + '/ImagensReduzidas/' + ficheiro		
-	Data.write(DirImage)
-	
+	DirImage = diretoria  + '/ImagensReduzidas/' + ficheiro	
+	Data.write(DirImage, overwrite = True)
+
 	if config["Astrometry"]:
 		#Runs sextractor on reduced image and produces sextractor catalogue
 		logging.debug("Starting Sextractor on " + ficheiro)
-		SexFile = diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'.cat'
 		SexTime = time.time()
-		resultado = sextractor(DirImage,directory,config['SexCatalog'],SexFile)     
+		SexFile = diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'LDAC.cat'
+		resultado = sextractor(DirImage,directory,config['SexConfig'],SexFile,'FITS_LDAC',int(config['VIGNET']))  
+		SexFile = diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'.cat'
+		resultado = sextractor(DirImage,directory,config['SexConfig'],SexFile,'FITS_1.0')  
+		RemoveBorders(diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'LDAC.cat',2,int(config['VIGNET']))
+		RemoveBorders(diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'.cat',1,int(config['VIGNET']))	
 		SexTime = time.time() - SexTime
+		logging.debug("Finished Sextractor on " + ficheiro)
+
 		
-		#Runs astrometry with sextractor catalogue and outputs in astrometry folder (corr,wcs,xyls) files
+		
+		# ~ #Runs astrometry with sextractor catalogue and outputs in astrometry folder (corr,wcs,xyls) files
 		logging.debug("Starting Astrometry on " + ficheiro)
 		AstTime = time.time()
 		result,status = astrometry(diretoria + '/SextractorCatalogue/' + ficheiro[:-5] + '.cat',Data.header,diretoria + '/AstrometryFiles',config) 
 		AstTime = time.time() - AstTime
+		logging.debug("Finished Astrometry on " + ficheiro)
 		
-		#Transforms from XY to RaDec with WCS information from astrometry
+		# ~ #Transforms from XY to RaDec with WCS information from astrometry
 		nomeficheiro = ficheiro.split('/')[-1].split('.')[0]														# Saves name of file (removes rest of extension)
-		FileWc = diretoria + '/AstrometryDefesa/' + nomeficheiro + '.wcs'											# Gets directory : WCS file created from astrometry 
+		FileWc = diretoria + '/AstrometryFiles/' + nomeficheiro + '.wcs'											# Gets directory : WCS file created from astrometry 
 		FileXY = diretoria + '/SextractorCatalogue/' + nomeficheiro + '.cat'										# Gets directory : catalogue created from sextractor
 		FileOutput = diretoria + '/AstrometryFiles/' + nomeficheiro													# Output file for calculation of RaDec coordinate of all stars
 		TransfTime = time.time()
@@ -345,18 +423,22 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 		TransfTime = time.time() - TransfTime
 
 		#Gets the information from the sextractor file and the calculated positions
-		Posicoes = fits.open(FileOutput)																			# Gets positions calculated
-		Ra,Dec = Posicoes[1].data['RA'],Posicoes[1].data['DEC']														# Saves RaDec positions
-		SexData = FuncoesReducao.ReadSextractorFileFit(SexFile)			# Reads sextractor file obtained in the beggining and saves desired values
-		X,Y,Mags,MagsErro,BackG,fluxo,FWHM,thresh= SexData['X_IMAGE'], SexData['Y_IMAGE'], SexData['MAG_ISOCOR'],SexData['MAGERR_ISOCOR'],SexData['BACKGROUND'],SexData['FLUX_ISOCOR'],SexData['FWHM_IMAGE'],SexData['THRESHOLD']
+		Posicoes = fits.open(FileOutput)												# Gets positions calculated
+		Ra,Dec = Posicoes[1].data['RA'],Posicoes[1].data['DEC']
+		SexFile = diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'.cat'							# Saves RaDec positions
+		SexData = ReadSextractorFileFit(SexFile)			# Reads sextractor file obtained in the beggining and saves desired values
+		X,Y,Mags,MagsErro,BackG,fluxo,FWHM= SexData['X_IMAGE'], SexData['Y_IMAGE'], SexData['MAG_ISOCOR'],SexData['MAGERR_ISOCOR'],SexData['BACKGROUND'],SexData['FLUX_ISOCOR'],SexData['FWHM_IMAGE']
 		
 		#Matches the objects found and the catalogue
 		stars = SkyCoord(ra = Longitude(Ra, unit = u.deg), dec = np.array(Dec)*u.deg, frame = 'cirs')  				# Creates SkyCoord object with RaDec positions obtained (needed for matching)
-		logging.debug("Finding match between catalog stars and detected objects in image " + ficheiro)
 		MatchTime = time.time()
-		idx,found = FuncoesReducao.find_matching_stars(stars, catalogo, max_sep=0.06 * u.deg) 						# Starts matching between these stars and catalogue stars
+		WCS = fits.open(FileWc)
+		scale = float(WCS[0].header['COMMENT'][-8].split()[1])
+		
+		max_sep = float(config['max_sep'])*np.median(FWHM)*scale/3600
+		idx,found = find_matching_stars(stars, catalogo, max_sep=max_sep * u.deg) 						# Starts matching between these stars and catalogue stars
 		MatchTime = time.time() - MatchTime
-		EncontradosX,EncontradosY,EncontradosMags = X[found],Y[found],Mags[found] 									#Saves X,Y and Mags positions found
+		EncontradosX = X[found]
 		logging.debug("found " + len(EncontradosX) + " catalog objects in image " + ficheiro)
 		
 
@@ -387,6 +469,10 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 	logging.info('TempoAstrometry: {:.2f}'.format(AstTime))
 	logging.info('TempoTransformar: {:.2f}'.format(TransfTime))
 	logging.info('TempoMatch: {:.2f}'.format(MatchTime))
+	
+	print(status)
+	print(ficheiro)
+	return None
 	
 def SeeFitsTables(filedir):
 	hdul = fits.open(filedir)
@@ -526,4 +612,99 @@ def find_matching_stars(catalog_stars, image_stars, max_sep=0.5 * u.deg):
 	idx, d2d, d3d = match_coordinates_sky(catalog_stars, image_stars,storekdtree = True)
 	mask = d2d < max_sep
 
-	return idx[mask], mask
+	return idx, mask, d2d
+
+def CreateMasters(DayDirectory,config):
+	''' Function to create master files from available Flats and Darks. It saves with exposure
+	and type of filter in name.
+	DayDirectory -> Directory for folder with darks and flats files
+	config -> Dictionary with configurations from Config File
+	
+	'''
+	Darks = OrganizeDarks(DayDirectory) # Sees available Darks
+	Flats = os.listdir(DayDirectory + '/Flats') # Sees available Flats
+	Masters = SeeMasters(DayDirectory)	
+
+	for Time in Darks:
+		if Time not in Masters['Dark']:
+			DFiles = Darks[Time]
+			DarkFiles = []
+			for i in DFiles:
+				DarkFiles.append(DayDirectory + '/Darks/' + i)
+			CreateMaster(DarkFiles,DayDirectory,Time,'Dark',config)	
+
+	for Filter in Flats:
+		if Filter not in Masters['Flat']:
+			FFiles = os.listdir(DayDirectory + '/Flats/' + Filter)
+			FlatFiles =[]
+			for i in FFiles:
+				FlatFiles.append(DayDirectory + '/Flats/' + Filter + '/' + i)
+			CreateMaster(FlatFiles,DayDirectory,Filter,'Flat',config)
+							
+def CreateMaster(Files,DayDirectory,Filter,Type,config):
+	''' Function to create single master file from set of files.
+	Files -> Array with directory for files to be used 
+	DayDirectory -> Directory for folder with darks and flats files
+	Filter -> Filter used in files, to be used to save in name (B,V,etc... or Time in dark case)
+	Type -> Type of master file (Dark,Flat)
+	config -> Dictionary with configurations from Config File
+	
+	'''
+	FilesRead = [CCDData.read(X, unit='adu', Format = 'fits') for X in Files]
+	Master = ccdproc.combine(FilesRead,method='median')
+	Master.header['FILTER'] = Filter
+	if (Type == 'Flat') & config['FLATdark']:
+		Dark = BestDark(DayDirectory + '/Masters',float(Master.header['EXPTIME'].replace(',','.')))							# Sees what is the best masterdark to apply
+		if Dark == []:
+			Master.header['DARK'] = 'False'												# Writes in header
+		else:
+			Dark = DayDirectory + '/Masters/' + Dark										# Gets Dark directory
+			MasterDark = CCDData.read(Dark) 												# Reads and then applies master
+			Master = ccdproc.ccd_process(Master, dark_frame=MasterDark,dark_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) * u.s,data_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) *u.s)
+			Master.header['DARK'] = 'True'													# Writes in header
+		
+	MasterName = "Master%s%s.fits" % (Type, Filter)
+	
+	Master.write(DayDirectory + '/Masters/' + MasterName)
+	return Master
+		
+def OrganizeDarks(DayDirectory):
+	''' Returns DarkFiles available in a dictionary of the type:
+	Dic = {100:[Dark100_001.fits,Dark100_002.fits],200:[Dark200_001.fits,Dark200_002.fits]}
+	
+	DayDirectory -> Directory for folder with darks and flats files
+	'''
+	Darks = os.listdir(DayDirectory + '/Darks')
+	times = {}
+	for i in Darks:
+		time = i[4:7]
+		if time in times:
+			times[time].append(i)
+		else:
+			times[time] = [i]
+	
+	return times
+			
+def SeeMasters(DayDirectory):
+	''' Returns a dictionary of the type:
+	Dic = {Flat: ['A','B','C']; Dark:['50','70','100','200']}
+	
+	DayDirectory -> Directory for folder with darks and flats files
+	
+	'''
+	MastersFiles = os.listdir(DayDirectory + '/Masters')
+	Masters = {'Flat': [],'Dark':[]}
+	for i in MastersFiles:
+		Type = i[6:10]
+		if Type =='Flat':
+			Masters[Type].append(i[10])
+		elif Type =='Dark':
+			Masters[Type].append(i[10:13])
+						
+	return Masters
+	
+def RemoveBorders(File,n,P):
+	with fits.open(File, mode = 'update') as A:
+		Dados = A[n].data
+		A[n].data = Dados[((Dados['Y_IMAGE']>P) & (Dados['Y_IMAGE']<2048-P)) & ((Dados['X_IMAGE']>P) & (Dados['X_IMAGE']<2048-P))]
+		A.close()

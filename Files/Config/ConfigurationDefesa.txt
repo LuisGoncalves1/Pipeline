@@ -1,34 +1,38 @@
 # Initial Correction
 
 LOGGER 10
-Catalog tycho2.dat
-
+Catalog tycho2.dat				# Catalog to be used
 
 
 # Reduction Process
-DARK False
-FLATdark True
-FLAT False
-GAIN True
-Filters False
-CrossTalk True
-alfa1 0.015
-alfa2 0.008
-CosmicRays True
-Background True
-Astrometry True
+DARK False					# Decides if applies Dark to images
+FLATdark True					# Decides if applies Dark to Flats
+FLAT False					# Decides if applies Flat to images
+GAIN True					# Decides if applies Gain Correction
+Filters False					# Decides if there are filters
+CrossTalk True					# Decides if applies CrossTalk Correction
+alfa1 0.015					# Value for CrossTalk correction according to : paper
+alfa2 0.008					# Value for CrossTalk correction
+CosmicRays True				# Decides if removes CosmicRays 
+Background True				# Decides if applies BackGround Correction
+Astrometry True				# Decides if runs Astrometry 
 
 
 # Visual
-GRAPH False
+GRAPH False					# If True draws image
 
+
+# Sex + PsFex
+SexConfig defaultDEFESA.sex			# Configuration file for Sextractor
+PSFexConfig defaultBRUNO.psfex		# Configuration file for PSFex
+VIGNET 45
 
 # Astrometry
-SexConfig defaultDEFESA.sex
-PSFexConfig defaultBRUNO.psfex
-cpulimit 20
-scale-low 3
-scale-high 7
-scale-units app
-radius 3
-max_sep 0.2
+cpulimit 2					# time limit for astrometry
+scale-low 3					# low estimate for image scale
+scale-high 5					# high estimate for image scale
+scale-units app				# untis for image scale estimates
+radius 3					# estimate for radius of image in degrees (diagonal of image)
+max_sep 2					# units of FWHM for comparison between stars found and catalog
+
+

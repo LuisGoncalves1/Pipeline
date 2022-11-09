@@ -19,14 +19,16 @@ Astrometry True				# Decides if runs Astrometry
 
 
 # Visual
-GRAPH False					# If yes draws image
+GRAPH False					# If True draws image
 
 
-# Astrometry
+# Sex + PsFex
 SexConfig defaultBRUNO.sex			# Configuration file for Sextractor
 PSFexConfig defaultBRUNO.psfex		# Configuration file for PSFex
-VIGNET 25
-cpulimit 120					# time limit for astrometry
+VIGNET 45
+
+# Astrometry
+cpulimit 2					# time limit for astrometry
 scale-low 0.1					# low estimate for image scale
 scale-high 5					# high estimate for image scale
 scale-units app				# untis for image scale estimates

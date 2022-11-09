@@ -1,4 +1,4 @@
-from Funcoes import FuncoesReducao, FuncoesMaster
+from Funcoes import FuncoesReducao
 from datetime import date
 import os
 from astropy.nddata import CCDData
@@ -27,17 +27,17 @@ def Analise(ficheiro,Masters):
 
 
 
-TempoEntreImagens = 1
+TempoEntreImagens = 5
 directory = os.getcwd()
-config = FuncoesReducao.ReadPipelineConfig(directory+"/Files/Config/ConfigurationBruno.txt")
+config = FuncoesReducao.ReadPipelineConfig(directory+"/Files/Config/ConfigurationDefesa.txt")
 config['LOGGER'] = int(config['LOGGER'])
-# ~ data = date.today()
-data = "2022-03-20"
+# ~ day = date.today()
+day = "2022-03-20"
 
 catalog_path = directory + '/Files/Catalogos/tycho2.dat'
 
 
-diretoria = "%s/Files/Imagens/%s" %(directory,str(data))
+diretoria = "%s/Files/Imagens/%s" %(directory,str(day))
 if not os.path.isdir(diretoria):
 	print('Não existem dados ainda deste dia')
 	os.mkdir(diretoria)
@@ -53,15 +53,15 @@ if not os.path.isdir(diretoria):
 if type(config['LOGGER']) != int or 0>config['LOGGER'] or 50<config['LOGGER']:
 	print('Logger fora de range')
 LOG_FORMAT = "%(levelname)s %(asctime)s : %(message)s"
-log_file_name = "%s/%s.log" %(diretoria,str(data))
+log_file_name = "%s/%s.log" %(diretoria,str(day))
 logging.basicConfig(filename = log_file_name, level = config['LOGGER'],format = LOG_FORMAT, filemode ='w')
 logger = logging.getLogger()
 logging.debug("Starting create Master Files")
 A = time.time()
-FuncoesMaster.CreateMasters(diretoria,config)
+FuncoesReducao.CreateMasters(diretoria,config)
 logging.info("Tempos para criarMasters : {:.2f}".format(time.time()-A) )
 logging.debug("Master Files Created")
-Masters = FuncoesMaster.SeeMasters(diretoria)
+Masters = FuncoesReducao.SeeMasters(diretoria)
 
 logging.debug("Starting to read catalogue")
 A = time.time()
@@ -75,14 +75,13 @@ logging.debug("Catalogue Read")
 
 
 
-threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 2)
+threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 1)
 A = time.time()
 while True:
 	# Enquanto n tem imagens
 	while len(os.listdir(path=diretoria + "/Imagens")) == 0:
 		print("ativos: " + str(len(threadpool._threads)))
 		print("queue: " + str(threadpool._work_queue.qsize()))
-			# ~ logging.info("Tempos para tratar todas imagens : {:.2f}".format(time.time()-A) )		
 		if threadpool._work_queue.qsize() + len(threadpool._threads) == 0:	
 			print('Não existem mais dados deste dia')
 		time.sleep(TempoEntreImagens)
