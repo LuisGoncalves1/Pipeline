@@ -18,7 +18,7 @@ import itertools
 from astropy.io import fits
 from astropy.table import Table
 from astropy.coordinates import SkyCoord, Longitude,  Angle, match_coordinates_sky
-
+import struct
 
 
 def sextractor(image,directory,catin,catout,cattype,VIGNET=None):
@@ -140,7 +140,7 @@ def XYToRaDec(FileWc,FileXY,FileOutput):
 	'''
 	
 	
-	cmd = ['wcs-xy2rd', 
+	cmd = ['ucac4tofits', 
 		'-w',FileWc, 									# WCS file directory
 		'-i', FileXY,									# Sextractor catalogue with XY positions file directory
 		'-o', FileOutput,								# Output file directory
@@ -153,6 +153,165 @@ def XYToRaDec(FileWc,FileXY,FileOutput):
 	status = result.returncode  						# Returns result, status = 0 if good and 255 if bad
 	return result, status	           		
 	      
+def UCAC4ToFitsTotal(FileIn,FileOutput):
+	with open(FileIn,'rb') as ficheiro:
+		A = ficheiro.read()
+	
+	with open(FileOutput,'a') as ficheiro:	
+		for i in range(int(len(A)/78)):
+			DadosEstrela = A[i*78:(i+1)*78]
+			
+			#Set de 15 bytes (15)
+			Ra = struct.unpack('i',DadosEstrela[0:4])[0]
+			Dec = struct.unpack('i',DadosEstrela[4:8])[0]
+			Magm = int.from_bytes(DadosEstrela[8:10],'little')
+			Maga = int.from_bytes(DadosEstrela[10:12],'little')
+			SigmaG = int(DadosEstrela[12])
+			ObjT = int(DadosEstrela[13])
+			Cdf = int(DadosEstrela[14])
+			
+			
+			#Set de 5 bytes (20)
+			sigra = int(DadosEstrela[15])
+			if sigra > 128/2:
+				sigra -= 128
+			sigdc = int(DadosEstrela[16])
+			if sigdc > 128/2:
+				sigdc -= 128
+			na1 = int(DadosEstrela[17])
+			nu1 = int(DadosEstrela[18])
+			cu1 = int(DadosEstrela[19])
+
+			
+			#Set de 10 bytes (30)
+			cepra = int.from_bytes(DadosEstrela[20:22],'little')
+			cepdc = int.from_bytes(DadosEstrela[22:24],'little')
+			pmrac = int.from_bytes(DadosEstrela[24:26],'little')
+			if pmrac > 65536/2:
+				pmrac -= 65536
+			pmdc = int.from_bytes(DadosEstrela[26:28],'little')
+			if pmdc > 65536/2:
+				pmdc -= 65536
+			sigpmr = int(DadosEstrela[28])
+			if sigpmr > 128/2:
+				sigpmr -= 128
+			sigpmd = int(DadosEstrela[29])
+			if sigpmd > 128/2:
+				sigpmd -= 128
+
+			
+			#Set de 16 bytes (46)
+			pts_key = struct.unpack('i',DadosEstrela[30:34])[0]
+			j_m = int.from_bytes(DadosEstrela[34:36],'little')
+			h_m = int.from_bytes(DadosEstrela[36:38],'little')
+			k_m = int.from_bytes(DadosEstrela[38:40],'little')
+			icqflg1 = int(DadosEstrela[40])
+			icqflg2 = int(DadosEstrela[41])
+			icqflg3 = int(DadosEstrela[42])
+			e2mpho1 = int(DadosEstrela[43])
+			e2mpho2 = int(DadosEstrela[44])
+			e2mpho3 = int(DadosEstrela[45])
+
+			
+			
+			#Set de 16 bytes (62)
+			apasm1 = int.from_bytes(DadosEstrela[46:48],'little')
+			apasm2 = int.from_bytes(DadosEstrela[48:50],'little')
+			apasm3 = int.from_bytes(DadosEstrela[50:52],'little')
+			apasm4 = int.from_bytes(DadosEstrela[52:54],'little')
+			apasm5 = int.from_bytes(DadosEstrela[54:56],'little')
+			apase1 = int(DadosEstrela[56])
+			apase2 = int(DadosEstrela[57])
+			apase3 = int(DadosEstrela[58])
+			apase4 = int(DadosEstrela[59])
+			apase5 = int(DadosEstrela[60])
+			gcflg = int(DadosEstrela[61])
+
+			
+		
+			#Set de 4 bytes (66)
+			icf = struct.unpack('i',DadosEstrela[62:66])[0]
+			icf = f'{icf:09d}'
+			icf1 = int(icf[0])
+			icf2 = int(icf[1])
+			icf3 = int(icf[2])
+			icf4 = int(icf[3])
+			icf5 = int(icf[4])
+			icf6 = int(icf[5])
+			icf7 = int(icf[6])
+			icf8 = int(icf[7])
+			icf9 = int(icf[8])
+
+			
+			#Set de 12 bytes (78)
+			leda = int(DadosEstrela[66])
+			x2m = int(DadosEstrela[67])
+			rnm = struct.unpack('i',DadosEstrela[68:72])[0]
+			zn2 = int.from_bytes(DadosEstrela[72:74],'little')
+			rn2 = struct.unpack('i',DadosEstrela[74:78])[0]
+	
+			
+			
+			# ~ linha = '{10:},{10:},{5:},{5:},{2:},{1:},{2:},{3:},{3:},{2:},{2:},{2:},{5:},{5:},{6:},{6:},{3:},{3:},{10:},{5:},{5:},{5:},{2:},{2:},{2:},{2:},{2:},{2:},{5:},{5:},{5:},{5:},{5:},{3:},{3:},{3:},{3:},{3:},{1:},{1:},{1:},{1:},{1:},{1:},{1:},{1:},{1:},{1:},{2:},{2:},{9:},{3:},{6:}\n'.format(Ra,Dec,Magm,Maga,SigmaG,ObjT,Cdf,sigra,sigdc,na1,nu1,cu1,cepra,cepdc,pmrac,pmdc,sigpmr,sigpmd,pts_key,j_m,h_m,k_m,icqflg1,icqflg2,icqflg3,e2mpho1,e2mpho2,e2mpho3,apasm1,apasm2,apasm3,apasm4,apasm5,apase1,apase2,apase3,apase4,apase5,gcflg,icf1,icf2,icf3,icf4,icf5,icf6,icf7,icf8,icf9,leda,x2m,rnm,zn2,rn2)
+			linha2 = f'{Ra:10},{Dec:9},{Magm:5},{Maga:5},{SigmaG:2},{ObjT:1},{Cdf:2},{sigra:3},{sigdc:3},{na1:2},{nu1:2},{cu1:2},{cepra:5},{cepdc:5},{pmrac:6},{pmdc:6},{sigpmr:3},{sigpmd:3},{pts_key:10},{j_m:5},{h_m:5},{k_m:5},{icqflg1:2},{icqflg2:2},{icqflg3:2},{e2mpho1:2},{e2mpho2:2},{e2mpho3:2},{apasm1:5},{apasm2:5},{apasm3:5},{apasm4:5},{apasm5:5},{apase1:3},{apase2:3},{apase3:3},{apase4:3},{apase5:3},{gcflg:1},{icf1:1},{icf2:1},{icf3:1},{icf4:1},{icf5:1},{icf6:1},{icf7:1},{icf8:1},{icf9:1},{leda:2},{x2m:2},{rnm:9},{zn2:3},{rn2:6}\n'
+			print(linha2)
+			ficheiro.write(linha2)
+		
+def UCAC4ToFits(FileIn,FileOutput):
+	with open(FileIn,'rb') as ficheiro:
+		A = ficheiro.read()
+	
+	with open(FileOutput,'a') as ficheiro:
+		# ~ linha2 = f'{"RA":10} {"DEC":9} {"Magm":5} {"Maga":5} {"B":5} {"V":5} {"g":5} {"r":5} {"i":5}\n'
+		# ~ ficheiro.write(linha2)	
+		for i in range(int(len(A)/78)):
+			DadosEstrela = A[i*78:(i+1)*78]
+			
+			#Set de 15 bytes (15)
+			Ra = struct.unpack('i',DadosEstrela[0:4])[0]#/(1000*60*60)
+			Dec = struct.unpack('i',DadosEstrela[4:8])[0]#/(1000*60*60)
+			Magm = int.from_bytes(DadosEstrela[8:10],'little')
+			Maga = int.from_bytes(DadosEstrela[10:12],'little')
+			
+			#Set de 16 bytes (62)
+			apasm1 = int.from_bytes(DadosEstrela[46:48],'little')
+			apasm2 = int.from_bytes(DadosEstrela[48:50],'little')
+			apasm3 = int.from_bytes(DadosEstrela[50:52],'little')
+			apasm4 = int.from_bytes(DadosEstrela[52:54],'little')
+			apasm5 = int.from_bytes(DadosEstrela[54:56],'little')
+	
+			
+			
+			linha2 = f'{Ra:10},{Dec:9},{Magm:5},{Maga:5},{apasm1:5},{apasm2:5},{apasm3:5},{apasm4:5},{apasm5:5}\n'
+			ficheiro.write(linha2)
+	
+def ZonesUCAC4(MinDec,MaxDec):
+	Decs = np.array([-90.0, -89.8, -89.6, -89.4, -89.2, -89.0, -88.8, -88.6, -88.4, -88.2, -88.0, -87.8, -87.6, -87.4, -87.2, -87.0, -86.8, -86.6, -86.4, -86.2, -86.0, -85.8, -85.6, -85.4, -85.2, -85.0, -84.8, -84.6, -84.4, -84.2, -84.0, -83.8, -83.6, -83.4, -83.2, -83.0, -82.8, -82.6, -82.4, -82.2, -82.0, -81.8, -81.6, -81.4, -81.2, -81.0, -80.8, -80.6, -80.4, -80.2, -80.0, -79.8, -79.6, -79.4, -79.2, -79.0, -78.8, -78.6, -78.4, -78.2, -78.0, -77.8, -77.6, -77.4, -77.2, -77.0, -76.8, -76.6, -76.4, -76.2, -76.0, -75.8, -75.6, -75.4, -75.2, -75.0, -74.8, -74.6, -74.4, -74.2, -74.0, -73.8, -73.6, -73.4, -73.2, -73.0, -72.8, -72.6, -72.4, -72.2, -72.0, -71.8, -71.6, -71.4, -71.2, -71.0, -70.8, -70.6, -70.4, -70.2, -70.0, -69.8, -69.6, -69.4, -69.2, -69.0, -68.8, -68.6, -68.4, -68.2, -68.0, -67.8, -67.6, -67.4, -67.2, -67.0, -66.8, -66.6, -66.4, -66.2, -66.0, -65.8, -65.6, -65.4, -65.2, -65.0, -64.8, -64.6, -64.4, -64.2, -64.0, -63.8, -63.6, -63.4, -63.2, -63.0, -62.8, -62.6, -62.4, -62.2, -62.0, -61.8, -61.6, -61.4, -61.2, -61.0, -60.8, -60.6, -60.4, -60.2, -60.0, -59.8, -59.6, -59.4, -59.2, -59.0, -58.8, -58.6, -58.4, -58.2, -58.0, -57.8, -57.6, -57.4, -57.2, -57.0, -56.8, -56.6, -56.4, -56.2, -56.0, -55.8, -55.6, -55.4, -55.2, -55.0, -54.8, -54.6, -54.4, -54.2, -54.0, -53.8, -53.6, -53.4, -53.2, -53.0, -52.8, -52.6, -52.4, -52.2, -52.0, -51.8, -51.6, -51.4, -51.2, -51.0, -50.8, -50.6, -50.4, -50.2, -50.0, -49.8, -49.6, -49.4, -49.2, -49.0, -48.8, -48.6, -48.4, -48.2, -48.0, -47.8, -47.6, -47.4, -47.2, -47.0, -46.8, -46.6, -46.4, -46.2, -46.0, -45.8, -45.6, -45.4, -45.2, -45.0, -44.8, -44.6, -44.4, -44.2, -44.0, -43.8, -43.6, -43.4, -43.2, -43.0, -42.8, -42.6, -42.4, -42.2, -42.0, -41.8, -41.6, -41.4, -41.2, -41.0, -40.8, -40.6, -40.4, -40.2, -40.0, -39.8, -39.6, -39.4, -39.2, -39.0, -38.8, -38.6, -38.4, -38.2, -38.0, -37.8, -37.6, -37.4, -37.2, -37.0, -36.8, -36.6, -36.4, -36.2, -36.0, -35.8, -35.6, -35.4, -35.2, -35.0, -34.8, -34.6, -34.4, -34.2, -34.0, -33.8, -33.6, -33.4, -33.2, -33.0, -32.8, -32.6, -32.4, -32.2, -32.0, -31.8, -31.6, -31.4, -31.2, -31.0, -30.8, -30.6, -30.4, -30.2, -30.0, -29.8, -29.6, -29.4, -29.2, -29.0, -28.8, -28.6, -28.4, -28.2, -28.0, -27.8, -27.6, -27.4, -27.2, -27.0, -26.8, -26.6, -26.4, -26.2, -26.0, -25.8, -25.6, -25.4, -25.2, -25.0, -24.8, -24.6, -24.4, -24.2, -24.0, -23.8, -23.6, -23.4, -23.2, -23.0, -22.8, -22.6, -22.4, -22.2, -22.0, -21.8, -21.6, -21.4, -21.2, -21.0, -20.8, -20.6, -20.4, -20.2, -20.0, -19.8, -19.6, -19.4, -19.2, -19.0, -18.8, -18.6, -18.4, -18.2, -18.0, -17.8, -17.6, -17.4, -17.2, -17.0, -16.8, -16.6, -16.4, -16.2, -16.0, -15.8, -15.6, -15.4, -15.2, -15.0, -14.8, -14.6, -14.4, -14.2, -14.0, -13.8, -13.6, -13.4, -13.2, -13.0, -12.8, -12.6, -12.4, -12.2, -12.0, -11.8, -11.6, -11.4, -11.2, -11.0, -10.8, -10.6, -10.4, -10.2, -10.0, -9.8, -9.6, -9.4, -9.2, -9.0, -8.8, -8.6, -8.4, -8.2, -8.0, -7.8, -7.6, -7.4, -7.2, -7.0, -6.8, -6.6, -6.4, -6.2, -6.0, -5.8, -5.6, -5.4, -5.2, -5.0, -4.8, -4.6, -4.4, -4.2, -4.0, -3.8, -3.6, -3.4, -3.2, -3.0, -2.8, -2.6, -2.4, -2.2, -2.0, -1.8, -1.6, -1.4, -1.2, -1.0, -0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0, 3.2, 3.4, 3.6, 3.8, 4.0, 4.2, 4.4, 4.6, 4.8, 5.0, 5.2, 5.4, 5.6, 5.8, 6.0, 6.2, 6.4, 6.6, 6.8, 7.0, 7.2, 7.4, 7.6, 7.8, 8.0, 8.2, 8.4, 8.6, 8.8, 9.0, 9.2, 9.4, 9.6, 9.8, 10.0, 10.2, 10.4, 10.6, 10.8, 11.0, 11.2, 11.4, 11.6, 11.8, 12.0, 12.2, 12.4, 12.6, 12.8, 13.0, 13.2, 13.4, 13.6, 13.8, 14.0, 14.2, 14.4, 14.6, 14.8, 15.0, 15.2, 15.4, 15.6, 15.8, 16.0, 16.2, 16.4, 16.6, 16.8, 17.0, 17.2, 17.4, 17.6, 17.8, 18.0, 18.2, 18.4, 18.6, 18.8, 19.0, 19.2, 19.4, 19.6, 19.8, 20.0, 20.2, 20.4, 20.6, 20.8, 21.0, 21.2, 21.4, 21.6, 21.8, 22.0, 22.2, 22.4, 22.6, 22.8, 23.0, 23.2, 23.4, 23.6, 23.8, 24.0, 24.2, 24.4, 24.6, 24.8, 25.0, 25.2, 25.4, 25.6, 25.8, 26.0, 26.2, 26.4, 26.6, 26.8, 27.0, 27.2, 27.4, 27.6, 27.8, 28.0, 28.2, 28.4, 28.6, 28.8, 29.0, 29.2, 29.4, 29.6, 29.8, 30.0, 30.2, 30.4, 30.6, 30.8, 31.0, 31.2, 31.4, 31.6, 31.8, 32.0, 32.2, 32.4, 32.6, 32.8, 33.0, 33.2, 33.4, 33.6, 33.8, 34.0, 34.2, 34.4, 34.6, 34.8, 35.0, 35.2, 35.4, 35.6, 35.8, 36.0, 36.2, 36.4, 36.6, 36.8, 37.0, 37.2, 37.4, 37.6, 37.8, 38.0, 38.2, 38.4, 38.6, 38.8, 39.0, 39.2, 39.4, 39.6, 39.8, 40.0, 40.2, 40.4, 40.6, 40.8, 41.0, 41.2, 41.4, 41.6, 41.8, 42.0, 42.2, 42.4, 42.6, 42.8, 43.0, 43.2, 43.4, 43.6, 43.8, 44.0, 44.2, 44.4, 44.6, 44.8, 45.0, 45.2, 45.4, 45.6, 45.8, 46.0, 46.2, 46.4, 46.6, 46.8, 47.0, 47.2, 47.4, 47.6, 47.8, 48.0, 48.2, 48.4, 48.6, 48.8, 49.0, 49.2, 49.4, 49.6, 49.8, 50.0, 50.2, 50.4, 50.6, 50.8, 51.0, 51.2, 51.4, 51.6, 51.8, 52.0, 52.2, 52.4, 52.6, 52.8, 53.0, 53.2, 53.4, 53.6, 53.8, 54.0, 54.2, 54.4, 54.6, 54.8, 55.0, 55.2, 55.4, 55.6, 55.8, 56.0, 56.2, 56.4, 56.6, 56.8, 57.0, 57.2, 57.4, 57.6, 57.8, 58.0, 58.2, 58.4, 58.6, 58.8, 59.0, 59.2, 59.4, 59.6, 59.8, 60.0, 60.2, 60.4, 60.6, 60.8, 61.0, 61.2, 61.4, 61.6, 61.8, 62.0, 62.2, 62.4, 62.6, 62.8, 63.0, 63.2, 63.4, 63.6, 63.8, 64.0, 64.2, 64.4, 64.6, 64.8, 65.0, 65.2, 65.4, 65.6, 65.8, 66.0, 66.2, 66.4, 66.6, 66.8, 67.0, 67.2, 67.4, 67.6, 67.8, 68.0, 68.2, 68.4, 68.6, 68.8, 69.0, 69.2, 69.4, 69.6, 69.8, 70.0, 70.2, 70.4, 70.6, 70.8, 71.0, 71.2, 71.4, 71.6, 71.8, 72.0, 72.2, 72.4, 72.6, 72.8, 73.0, 73.2, 73.4, 73.6, 73.8, 74.0, 74.2, 74.4, 74.6, 74.8, 75.0, 75.2, 75.4, 75.6, 75.8, 76.0, 76.2, 76.4, 76.6, 76.8, 77.0, 77.2, 77.4, 77.6, 77.8, 78.0, 78.2, 78.4, 78.6, 78.8, 79.0, 79.2, 79.4, 79.6, 79.8, 80.0, 80.2, 80.4, 80.6, 80.8, 81.0, 81.2, 81.4, 81.6, 81.8, 82.0, 82.2, 82.4, 82.6, 82.8, 83.0, 83.2, 83.4, 83.6, 83.8, 84.0, 84.2, 84.4, 84.6, 84.8, 85.0, 85.2, 85.4, 85.6, 85.8, 86.0, 86.2, 86.4, 86.6, 86.8, 87.0, 87.2, 87.4, 87.6, 87.8, 88.0, 88.2, 88.4, 88.6, 88.8, 89.0, 89.2, 89.4, 89.6, 89.8, 90.0])
+	mask = (Decs>MinDec) & (Decs<MaxDec)
+	index =  [i for i, x in enumerate(mask) if x]
+	index.append(index[-1]+1)
+	return index
+
+def ReadUCAC4(Zones,Folder,MagLim):
+	Ra = []
+	Dec = []
+	for i in Zones:
+		print(i)
+		zone = f'{i:03d}'
+		with open(Folder + zone + '.txt','r') as text:
+			while True:
+				line = text.readline()
+				if line == '':
+					break
+				
+				line = line.strip().split(',')
+				Mag = line[2]
+				if int(Mag) < 1000*MagLim:
+					Ra.append(int(line[0])/(60*60*1000))
+					Dec.append(int(line[1])/(60*60*1000)-90)
+			
+	return SkyCoord(ra = Longitude(Ra, unit = u.deg), dec = np.array(Dec)*u.deg,frame = 'cirs')
+		
 def RaDecToXY(FileWc,FileRaDec,FileOutput):
 	cmd = ['wcs-rd2xy', 
 		'-w',FileWc, 									# WCS file directory
@@ -308,8 +467,8 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 	Data = CCDData.read(diretoria + "/ImagensTratadas/" + ficheiro, unit = 'adu') 			# Reads Image
 	raw = Data.data.copy()																	# Copys data so it conserves initial image
 	Filter = Data.header['FILTER']															# Gets filter from header
-	# ~ exposure = float(Data.header['EXPTIME'].replace(',','.'))							# Bruno
-	exposure = float(Data.header['EXPTIME'])												# Defesa
+	exposure = float(Data.header['EXPTIME'].replace(',','.'))								# Bruno
+	# ~ exposure = float(Data.header['EXPTIME'])												# Defesa
 	
 	A = time.time()
 	if config["DARK"]:																		# If DARK is True does dark correction
@@ -410,6 +569,7 @@ def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,
 		logging.debug("Starting Astrometry on " + ficheiro)
 		AstTime = time.time()
 		result,status = astrometry(diretoria + '/SextractorCatalogue/' + ficheiro[:-5] + '.cat',Data.header,diretoria + '/AstrometryFiles',config) 
+		print(result)
 		AstTime = time.time() - AstTime
 		logging.debug("Finished Astrometry on " + ficheiro)
 		

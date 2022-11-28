@@ -25,14 +25,15 @@ config = FuncoesReducao.ReadPipelineConfig(directory+"/Files/Config/Configuratio
 config['LOGGER'] = int(config['LOGGER'])
 data = "2022-03-20"
 diretoria = "%s/Files/Imagens/%s" %(directory,str(data))
-catalog_path = directory + '/Files/Catalogos/tycho2.dat'
-catalogo,mag,BTMag = FuncoesReducao.ReadTychoCatalogue(catalog_path)
+MagLim = 14
+
+
 
 
 
 # ~ ficheiro = '1037-293R_003.fits'
 # ~ ficheiro = '1048-411R_004.fits'
-ficheiro = 'MAPA_SURV_4_085283_220417_114004+060023_scan047_02.fits'
+ficheiro = 'MAPA_SURV_4_085283_220417_114004+060023_scan047_03.fits'
 
 DirImage = diretoria  + '/ImagensReduzidas/' + ficheiro		
 
@@ -46,29 +47,44 @@ SexFile = diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'.cat'							# Sav
 SexData = FuncoesReducao.ReadSextractorFileFit(SexFile)			# Reads sextractor file obtained in the beggining and saves desired values
 X,Y,Mags,MagsErro,BackG,fluxo,FWHM= SexData['X_IMAGE'], SexData['Y_IMAGE'], SexData['MAG_ISOCOR'],SexData['MAGERR_ISOCOR'],SexData['BACKGROUND'],SexData['FLUX_ISOCOR'],SexData['FWHM_IMAGE']
 		
+		
+
 #Matches the objects found and the catalogue
 stars = SkyCoord(ra = Longitude(Ra, unit = u.deg), dec = np.array(Dec)*u.deg, frame = 'cirs')  				# Creates SkyCoord object with RaDec positions obtained (needed for matching)
 MatchTime = time.time()
 FileWc = diretoria + '/AstrometryFiles/' + nomeficheiro + '.wcs'											# Gets directory : WCS file created from astrometry 
 WCS = fits.open(FileWc)
 scale = float(WCS[0].header['COMMENT'][-8].split()[1])
-		
-max_sep = float(config['max_sep'])*np.median(FWHM)*scale/3600
+max_sep = float(config['max_sep'])*np.median(FWHM[FWHM!=0])*scale/3600
 print(max_sep)
+
+A = time.time()
+
+catalog_path = directory + '/Files/Catalogos/UCAC4/'
+catalogo= FuncoesReducao.ReadUCAC4(FuncoesReducao.ZonesUCAC4(min(Dec),max(Dec)),catalog_path,MagLim)
+# ~ catalog_path = directory + '/Files/Catalogos/tycho2.dat'
+# ~ catalogo,mag,BTMag = FuncoesReducao.ReadTychoCatalogue(catalog_path)
+
+tempoCatalogo = time.time()-A
+
+
 idx,found,dx = FuncoesReducao.find_matching_stars(stars, catalogo, max_sep=max_sep * u.deg) 						# Starts matching between these stars and catalogue stars
-print(idx)
-print(found)
 print(dx)
-print('------')
-print(dx[found])
-print(np.mean(dx[found]))
-print(Mags[found])
-print(np.mean(Mags[found]))
-print('------')
-print(dx[~found])
-print(np.mean(dx[~found]))
-print(Mags[~found])
-print(np.mean(Mags[~found]))
+print(np.median(dx))
+# ~ print(Dec[~found])
+# ~ print(idx)
+# ~ print(found)
+# ~ print(dx)
+# ~ print('------')
+# ~ print(dx[found])
+# ~ print(np.mean(dx[found]))
+# ~ print(Mags[found])
+# ~ print(np.mean(Mags[found]))
+# ~ print('------')
+# ~ print(dx[~found])
+# ~ print(np.mean(dx[~found]))
+# ~ print(Mags[~found])
+# ~ print(np.mean(Mags[~found]))
 MatchTime = time.time() - MatchTime
 		
 
@@ -89,23 +105,24 @@ Imagem = CCDData.read(diretoria + "/ImagensReduzidas/" + ficheiro, unit = 'adu')
 fig,axes = plt.subplots(2,2)
 ax = axes.ravel()
 ax[0].imshow(Imagem,cmap='gray')
+ax[0].set_title('Todas')
 ax[1].imshow(Imagem,cmap='gray')
+ax[1].set_title('Encontradas')
 ax[2].imshow(Imagem,cmap='gray')
+ax[2].set_title('Faltam')
 ax[3].imshow(Imagem,cmap='gray')
+fig.suptitle('Mag: ' + str(MagLim)+ '  Tempo: ' + str(tempoCatalogo)+  '  NEstrelas: ' + str(len(catalogo.dec)))
 for contador in range(len(Y)):
 	c1 = plt.Circle((X[contador],Y[contador]),4, color = 'green', linewidth=2,fill=False)
 	ax[0].add_patch(c1)
-	ax[0].set_title('Todas')
 
 for contador in range(len(Y1)):
 	c1 = plt.Circle((X1[contador],Y1[contador]),4, color = 'green', linewidth=2,fill=False)
 	ax[1].add_patch(c1)
-	ax[1].set_title('Encontradas')
 	
 for contador in range(len(Y2)):
 	c1 = plt.Circle((X2[contador],Y2[contador]),4, color = 'green', linewidth=2,fill=False)
 	ax[2].add_patch(c1)
-	ax[2].set_title('Faltam')
 			
 plt.show()
 

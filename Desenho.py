@@ -76,7 +76,7 @@ for i in range(len(Imagens)):
 	
 	X = X[~found]
 	Y = Y[~found]
-	ax[i].set_title(str(max_sep))
+	ax[i].set_title(str(max_sep*3600))
 	for contador in range(len(Y)):
 		color = 'green'
 		# ~ if FWHM[contador] == 0:

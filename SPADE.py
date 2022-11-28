@@ -29,7 +29,7 @@ def Analise(ficheiro,Masters):
 
 TempoEntreImagens = 5
 directory = os.getcwd()
-config = FuncoesReducao.ReadPipelineConfig(directory+"/Files/Config/ConfigurationDefesa.txt")
+config = FuncoesReducao.ReadPipelineConfig(directory+"/Files/Config/ConfigurationBruno.txt")
 config['LOGGER'] = int(config['LOGGER'])
 # ~ day = date.today()
 day = "2022-03-20"
@@ -75,7 +75,7 @@ logging.debug("Catalogue Read")
 
 
 
-threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 1)
+threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 6)
 A = time.time()
 while True:
 	# Enquanto n tem imagens
