@@ -1,5 +1,5 @@
 # Initial Correction
-VERBOSE True
+VERBOSE False
 
 
 LOGGER 10

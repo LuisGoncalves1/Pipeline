@@ -220,7 +220,7 @@ FLUX_RADIUS
 #DELTAPSF_B1950           Declination of the fitted PSF (B1950)                     [deg]
 #FLUX_PSF                 Flux from PSF-fitting                                     [count]
 #FLUXERR_PSF              RMS flux error for PSF-fitting                            [count]
-MAG_PSF                  Magnitude from PSF-fitting                                [mag]
+#MAG_PSF                  Magnitude from PSF-fitting                                [mag]
 #MAGERR_PSF               RMS magnitude error from PSF-fitting                      [mag]
 #NITER_PSF                Number of iterations for PSF-fitting                     
 #CHI2_PSF                 Reduced chi2 from PSF-fitting                            
