@@ -1,8 +1,10 @@
 # Initial Correction
+VERBOSE True
+
 
 LOGGER 10
 Catalog tycho2.dat				# Catalog to be used
-
+MagLim 15
 
 # Reduction Process
 DARK False					# Decides if applies Dark to images

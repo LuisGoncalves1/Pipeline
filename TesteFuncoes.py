@@ -17,19 +17,18 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.coordinates import SkyCoord, Longitude,  Angle, match_coordinates_sky
 
-directory = os.getcwd()
+PipelineDirectory = os.getcwd()
 data = "2022-03-20"
-diretoria = "%s/Files/Imagens/%s" %(directory,str(data))
-config = FuncoesReducao.ReadPipelineConfig(directory+"/Files/Config/ConfigurationDefesa.txt")
-
-ficheiro = 'MAPA_SURV_4_085283_220417_114004+060023_scan047_01.cat'
-FileName = diretoria  + '/SextractorCatalogue/' + ficheiro		
+DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(data))
+config = FuncoesReducao.ReadPipelineConfig(PipelineDirectory+"/Files/Config/ConfigurationDefesa.txt")
+Base = 'MAPA_SURV_4_085283_220417_114004+060023_scan047_01'
 
 
-A = fits.open(FileName, mode = 'update')
-A[1].data = A[1].data[A[1].data['FWHM_IMAGE'] != 0]
-A.close()
-		
+
+
+
+#Cenas
+Detections , DetectionsMags, Catalogue, CatalogueMags, found = FuncoesReducao.CatalogComparison(Base,PipelineDirectory,DayDirectory,config)
 
 
 

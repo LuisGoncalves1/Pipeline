@@ -29,7 +29,7 @@ def Analise(ficheiro,Masters):
 
 TempoEntreImagens = 5
 directory = os.getcwd()
-config = FuncoesReducao.ReadPipelineConfig(directory+"/Files/Config/ConfigurationBruno.txt")
+config = FuncoesReducao.ReadPipelineConfig(directory+"/Files/Config/ConfigurationDefesa.txt")
 config['LOGGER'] = int(config['LOGGER'])
 # ~ day = date.today()
 day = "2022-03-20"
