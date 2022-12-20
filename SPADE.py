@@ -49,7 +49,8 @@ if not os.path.isdir(diretoria):
 	os.mkdir(diretoria + "/Masters")
 	os.mkdir(diretoria + "/SextractorCatalogue")
 	os.mkdir(diretoria + "/AstrometryFiles")
-
+	os.mkdir(diretoria + "/OutputFiles")
+	
 if type(config['LOGGER']) != int or 0>config['LOGGER'] or 50<config['LOGGER']:
 	print('Logger fora de range')
 LOG_FORMAT = "%(levelname)s %(asctime)s : %(message)s"

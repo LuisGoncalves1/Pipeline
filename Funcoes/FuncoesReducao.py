@@ -1149,14 +1149,14 @@ def DarkCorrection(DayDirectory,Data,File,exposure,logging):
 	logging.debug("Starting Dark correction of file " + File)						# Logger information
 	Master = BestDark(DayDirectory + '/Masters',exposure)									# Sees what is the best masterdark to apply
 	if Master == []:
-		logging.warning('There are no Darks available of type ' + Filter)				# IF there is none, it skips over dark correction
+		logging.warning('There are no Darks available for exposure ' + exposure)				# IF there is none, it skips over dark correction
 		Data.header['DARK'] = 'False'													# Writes in header
 	else:
 		Master = DayDirectory + '/Masters/' + Master										# Gets master directory
 		MasterDark = CCDData.read(Master) 												# Reads and then applies master
 		Data = ccdproc.ccd_process(Data, dark_frame=MasterDark,dark_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) * u.s,data_exposure = float(Data.header["EXPOSURE"].replace(',','.')) *u.s)
 		Data.header['DARK'] = 'True'													# Writes in header
-		logging.debug("Finished Dark correction of file " + ficheiro)					# Logger information
+		logging.debug("Finished Dark correction of file " + File)					# Logger information
 
 	return Data
 
@@ -1183,11 +1183,11 @@ def FlatCorrection(DayDirectory,Data,File,Filter,Masters,logging):
 		logging.warning('There are no Flats available of type ' + Filter)				# Logger information if there is no flat
 		Data.header['FLAT'] = 'False'													# Writes in header
 	else:
-		Master = diretoria + '/Masters/MasterFlat' + Filter + '.fits'					# Gets master directory
+		Master = DayDirectory + '/Masters/MasterFlat' + Filter + '.fits'					# Gets master directory
 		MasterFlat = CCDData.read(Master)												# Reads master
 		Data = ccdproc.ccd_process(Data, master_flat = MasterFlat)						# Applies Master
 		Data.header['FLAT'] = 'True'													# Writes in header
-		logging.debug("Finished Fits correction of file " + ficheiro)					# Logger information
+		logging.debug("Finished Fits correction of file " + File)					# Logger information
 	
 	return Data
 	
@@ -1449,7 +1449,7 @@ def CatalogComparison(Base,PipelineDirectory,DayDirectory,config):
 	Posicoes = fits.open(FileOutput)												# Gets positions calculated
 	Ra,Dec = Posicoes[-1].data['RA'],Posicoes[-1].data['DEC']
 	SexData = ReadSextractorFileFit(FileXY)			# Reads sextractor file obtained in the beggining and saves desired values
-	DetectionsMags, FWHM = SexData['MAG_ISOCOR'],SexData['FWHM_IMAGE']
+	X,Y, DetectionsMags, FWHM = SexData['X_IMAGE'], SexData['Y_IMAGE'], SexData['MAG_ISOCOR'], SexData['FWHM_IMAGE']
 
 	#Matches the objects found and the catalogue
 	Detections = SkyCoord(ra = Longitude(Ra, unit = u.deg), dec = np.array(Dec)*u.deg, frame = 'cirs')  				# Creates SkyCoord object with RaDec positions obtained (needed for matching)
@@ -1464,17 +1464,43 @@ def CatalogComparison(Base,PipelineDirectory,DayDirectory,config):
 	
 	CatalogueMags = np.array(CatalogueMags['G'])[idx]
 	Catalogue = Catalogue[idx]
-	return Detections, DetectionsMags, Catalogue, CatalogueMags, found
+	return X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found
 	
 def AnalyseDebris():
 	#Algo
 	x = 1+1
 	
+def WriteOutput(Base,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found):
+	with open(DayDirectory + '/OutputFiles/' + Base,'a') as ficheiro:
+		linha = f'{"Xdetect":20},{"Ydetect":20},{"Match":6},{"RaCalculated":20},{"DecCalculated":20},{"RaCatalogue":20},{"DecCatalogue":20},{"MagInst":19},{"MagReal":8}\n'
+		ficheiro.write(linha)
+		for i in range(len(Detections)):
+			Xdetect = X[i]
+			Ydetect = Y[i]
+			RaCalculated = Detections.ra[i].value
+			DecCalculated = Detections.dec[i].value
+			MagInst = DetectionsMags[i]
+			Match = found[i]
+			if Match:
+				RaCatalogue = Catalogue.ra[i].value
+				DecCatalogue = Catalogue.dec[i].value
+				MagReal = CatalogueMags[i]
+			else:
+				RaCatalogue = '-'
+				DecCatalogue = '-'
+				MagReal = 0
+			
+			
+			
+			linha = f'{Xdetect:20},{Ydetect:20},{Match:6},{RaCalculated:20},{DecCalculated:20},{RaCatalogue:20},{DecCatalogue:20},{MagInst:19},{MagReal:8}\n'
+			ficheiro.write(linha)
+		
 def ImageProcess(Base,PipelineDirectory,DayDirectory,Masters,config,logging):
 	header = ImageReduction(Base,PipelineDirectory,DayDirectory,Masters,config,logging)
 	SextractorPart(Base,PipelineDirectory,DayDirectory,config)
 	AstrometryPart(Base,PipelineDirectory,DayDirectory,config,header)
-	Detections, DetectionsMags, Catalogue, CatalogueMags, found = CatalogComparison(Base,PipelineDirectory,DayDirectory,config)
+	X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found = CatalogComparison(Base,PipelineDirectory,DayDirectory,config)
+	WriteOutput(Base,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found)
 	
 def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,mag):
 	''' Main function to analise an image. 

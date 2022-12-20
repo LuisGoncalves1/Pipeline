@@ -34,12 +34,14 @@ Masters = FuncoesReducao.SeeMasters(DayDirectory)
 
 
 MagLim = 15
+Imagens = DayDirectory + '/OriginalImages'
+Imagens = os.listdir(Imagens)
+# ~ Imagens = ['MAPA_SURV_4_085283_220417_114004+060023_scan047_01.fits',
+# ~ 'MAPA_SURV_4_085283_220417_114004+060023_scan047_02.fits',
+# ~ 'MAPA_SURV_4_085283_220417_114004+060023_scan047_03.fits',
+# ~ 'MAPA_SURV_4_085283_220417_114004+060023_scan047_04.fits']
 
-Imagens = ['MAPA_SURV_4_085283_220417_114004+060023_scan047_01.fits',
-'MAPA_SURV_4_085283_220417_114004+060023_scan047_02.fits',
-'MAPA_SURV_4_085283_220417_114004+060023_scan047_03.fits',
-'MAPA_SURV_4_085283_220417_114004+060023_scan047_04.fits']
-
+print(Imagens)
 n = 0
 for ficheiro in Imagens:	
 	Base = ficheiro.split('/')[-1].split('.')[0]
