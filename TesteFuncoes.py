@@ -24,9 +24,22 @@ config = FuncoesReducao.ReadPipelineConfig(PipelineDirectory+"/Files/Config/Conf
 Base = 'MAPA_SURV_4_085283_220417_114004+060023_scan047_01'
 
 
+A = FuncoesReducao.ReadOutput('/home/luis/Desktop/Codigos/Pipeline/Files/Images/2022-03-20/OutputFiles/MAPA_SURV_4_085283_220417_114004+060023_scan047_01')
 
 
+mask = A['RaCatalogue']!= '-'
+CalculatedValues = {'RA':np.asarray(A['RaCalculated'][mask],dtype=np.float64),'DEC':np.asarray(A['DecCalculated'][mask],dtype=np.float64)}
+CatalogueValues  = {'RA':np.asarray(A['RaCatalogue'][mask],dtype=np.float64),'DEC':np.asarray(A['DecCatalogue'][mask],dtype=np.float64)}
+Dists = FuncoesReducao.AngleDifferenceLists(CalculatedValues,CatalogueValues)
+print(Dists)
 
+plt.hist(Dists*3600,bins=20)
+plt.ylabel('Number of counts')
+plt.xlabel('Distance between Calculated and Catalogue (arcsec)')
+plt.show()
+
+
+time.sleep(500)
 #Cenas
 Detections , DetectionsMags, Catalogue, CatalogueMags, found = FuncoesReducao.CatalogComparison(Base,PipelineDirectory,DayDirectory,config)
 

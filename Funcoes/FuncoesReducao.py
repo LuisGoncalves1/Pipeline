@@ -596,6 +596,32 @@ def str2bool(BoolStr):
 	else:
 		return BoolStr
 
+def AngleDifferencePoints(Coord1,Coord2):
+	Ra1  = np.radians(Coord1[0])
+	Dec1 = np.radians(Coord1[1])
+	Ra2  = np.radians(Coord2[0])
+	Dec2 = np.radians(Coord2[1])
+	
+	difference = np.arccos(np.sin(Dec1)*np.sin(Dec2)+np.cos(Dec1)*np.cos(Dec2)*np.cos(Ra1-Ra2))
+	return difference
+	
+def AngleDifferenceLists(L1,L2):
+	''' Calculates Angular difference between two sets of data Keys: 'RA' and 'DEC'
+	L -> {RA:[Ra1,Ra2],DEC:[Dec1,Dec2]}
+	
+	
+	'''
+	if len(L1) != len(L2):
+		print('Different size lists! Please use two lists of same size')
+		return None
+	
+	Dists = []
+	for i in range(len(L1['RA'])):
+		Coord1 = [L1['RA'][i],L1['DEC'][i]]
+		Coord2 = [L2['RA'][i],L2['DEC'][i]]
+		Dists.append(AngleDifferencePoints(Coord1,Coord2))
+	
+	return np.array(Dists)
 
 ##################################################################################################################################################################
 
@@ -935,7 +961,64 @@ def RemoveBorders(File,P):
 		A[-1].data = Dados[((Dados['Y_IMAGE']>P) & (Dados['Y_IMAGE']<2048-P)) & ((Dados['X_IMAGE']>P) & (Dados['X_IMAGE']<2048-P))]
 		A.close()
 	
+def WriteOutput(Base,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found):
+	'''
+	Creates txt Output File with Information about detections:
+	X,Y,(Ra,Dec) calculated, (Ra,Dec) catalogue, Mag calculated, Mag catalogue
+	
+	'''
+	with open(DayDirectory + '/OutputFiles/' + Base,'a') as ficheiro:
+		linha = f'{"Xdetect":20},{"Ydetect":20},{"Match":6},{"RaCalculated":20},{"DecCalculated":20},{"RaCatalogue":20},{"DecCatalogue":20},{"MagInst":19},{"MagReal":8}\n'
+		ficheiro.write(linha)
+		for i in range(len(Detections)):
+			Xdetect = X[i]
+			Ydetect = Y[i]
+			RaCalculated = Detections.ra[i].value
+			DecCalculated = Detections.dec[i].value
+			MagInst = DetectionsMags[i]
+			Match = found[i]
+			if Match:
+				RaCatalogue = Catalogue.ra[i].value
+				DecCatalogue = Catalogue.dec[i].value
+				MagReal = CatalogueMags[i]
+			else:
+				RaCatalogue = '-'
+				DecCatalogue = '-'
+				MagReal = 0
+			
+			
+			
+			linha = f'{Xdetect:20},{Ydetect:20},{Match:6},{RaCalculated:20},{DecCalculated:20},{RaCatalogue:20},{DecCatalogue:20},{MagInst:19},{MagReal:8}\n'
+			ficheiro.write(linha)
 
+def ReadOutput(OutputFile):
+	'''
+	Reads an output file created by WriteOutput and returns a dictionary with:
+	{Variable1:[A1,A2,A3],Variable2:[B1,B2,B3]} (strings)
+ 	
+	'''
+	Dict = {}
+	with open(OutputFile) as File:
+		FirstLine = File.readline()
+		FirstLine = FirstLine.replace(' ','')
+		Variables = FirstLine.strip().split(',')
+		for i in Variables:
+			Dict[i] = np.array([])
+		
+		while True:
+			Line = File.readline()
+			if Line == '':
+				break
+			Line = Line.replace(' ','')
+			Data = Line.strip().split(',')
+			for i in range(len(Data)):
+				Dict[Variables[i]] = np.append(Dict[Variables[i]],Data[i])
+			
+	
+	return Dict
+		
+	
+	
 ##################################################################################################################################################################
 
 # Specific Softwares
@@ -1469,32 +1552,7 @@ def CatalogComparison(Base,PipelineDirectory,DayDirectory,config):
 def AnalyseDebris():
 	#Algo
 	x = 1+1
-	
-def WriteOutput(Base,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found):
-	with open(DayDirectory + '/OutputFiles/' + Base,'a') as ficheiro:
-		linha = f'{"Xdetect":20},{"Ydetect":20},{"Match":6},{"RaCalculated":20},{"DecCalculated":20},{"RaCatalogue":20},{"DecCatalogue":20},{"MagInst":19},{"MagReal":8}\n'
-		ficheiro.write(linha)
-		for i in range(len(Detections)):
-			Xdetect = X[i]
-			Ydetect = Y[i]
-			RaCalculated = Detections.ra[i].value
-			DecCalculated = Detections.dec[i].value
-			MagInst = DetectionsMags[i]
-			Match = found[i]
-			if Match:
-				RaCatalogue = Catalogue.ra[i].value
-				DecCatalogue = Catalogue.dec[i].value
-				MagReal = CatalogueMags[i]
-			else:
-				RaCatalogue = '-'
-				DecCatalogue = '-'
-				MagReal = 0
 			
-			
-			
-			linha = f'{Xdetect:20},{Ydetect:20},{Match:6},{RaCalculated:20},{DecCalculated:20},{RaCatalogue:20},{DecCatalogue:20},{MagInst:19},{MagReal:8}\n'
-			ficheiro.write(linha)
-		
 def ImageProcess(Base,PipelineDirectory,DayDirectory,Masters,config,logging):
 	header = ImageReduction(Base,PipelineDirectory,DayDirectory,Masters,config,logging)
 	SextractorPart(Base,PipelineDirectory,DayDirectory,config)
