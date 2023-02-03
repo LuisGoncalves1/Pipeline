@@ -19,6 +19,7 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.coordinates import SkyCoord, Longitude,  Angle, match_coordinates_sky
 import struct
+import requests
 
 # CATALOG FUNCTIONS
 
@@ -603,7 +604,7 @@ def AngleDifferencePoints(Coord1,Coord2):
 	Dec2 = np.radians(Coord2[1])
 	
 	difference = np.arccos(np.sin(Dec1)*np.sin(Dec2)+np.cos(Dec1)*np.cos(Dec2)*np.cos(Ra1-Ra2))
-	return difference
+	return np.degrees(difference)
 	
 def AngleDifferenceLists(L1,L2):
 	''' Calculates Angular difference between two sets of data Keys: 'RA' and 'DEC'
@@ -1017,7 +1018,21 @@ def ReadOutput(OutputFile):
 	
 	return Dict
 		
+def ReadTLES(Links,Files):
+	if len(Links) != len(Files):
+		print('The length of Links array is different from Files array!')
+		return None
 	
+	Sucess = [False]*len(Links)
+	
+	for i in range(len(Links)):
+		response = requests.get(Links[i])
+		if response.status_code == 200:
+			with open(Files[i],'w') as Teste:
+				Teste.write(response.text)
+				Sucess[i] = True
+		
+	return Sucess
 	
 ##################################################################################################################################################################
 
