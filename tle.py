@@ -1,9 +1,11 @@
 import json
 import requests
+from skyfield.api import EarthSatellite
+from skyfield.api import load, wgs84
 
 '''
 ReadTLES(Links) function uploads tle information from a given url and saves it in a .json file (a list of dicts).
-Currently, I am using celestrak to extract the tles, and foccusing on GeoProtectedZone and GeoProtectedZonePlus sattelites
+Currently, I am using celestrak to extract the tles, and foccusing on GeoProtectedZone and GeoProtectedZonePlus satellites.
 '''
 
 def ReadTLES(Links):
@@ -37,9 +39,31 @@ def ReadTLES(Links):
 			json.dump(tle_jsonfile, f, indent=3)
 			print('[+] TLE data downloaded in GEO_tles.json')
 		
-				
-		
+					
 #a=ReadTLES(['https://celestrak.org/NORAD/elements/gp.php?SPECIAL=gpz&FORMAT=tle',
 #'https://celestrak.org/NORAD/elements/gp.php?SPECIAL=gpz-plus&FORMAT=tle'])
 
+'''
+DetermineSatellitePosition() is still in construction
+'''
 
+def DetermineSatellitePosition():
+	with open("GEO_tles.json", 'r') as stream:
+		lista_ficheiro=json.load(stream)
+		
+	ts = load.timescale()
+
+	for i in lista_ficheiro:
+	
+		line1=i['tle_1']
+		line2=i['tle_2']
+		name=i['satellite_name']
+	
+		# An Earth satellite loaded from a TLE file and propagated with SGP4. 
+		satellite = EarthSatellite(line1, line2, name, ts)
+		#print(satellite)
+	
+		#The “epoch” date of a satellite element set is the all-important date and time for which the set of elements is most accurate,
+		#and before or after which they go rapidly out of date.
+		print(f"Epoch data:{satellite.epoch.utc_jpl()}")
+	
