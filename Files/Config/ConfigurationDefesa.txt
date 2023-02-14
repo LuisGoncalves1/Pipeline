@@ -3,7 +3,7 @@ VERBOSE False
 
 
 LOGGER 10
-Catalog tycho2.dat				# Catalog to be used
+Catalog UCAC5				# Catalog to be used, the options implemented are: Tycho2 (tycho2.dat file), UCAC4 (UCAC4 folder), UCAC5 (UCAC5 folder), Hipparchos (hipparcos.fits files)  
 MagLim 15
 
 # Reduction Process
@@ -30,7 +30,7 @@ PSFexConfig defaultBRUNO.psfex		# Configuration file for PSFex
 VIGNET 45
 
 # Astrometry
-cpulimit 2					# time limit for astrometry
+cpulimit 2					# time limit for astrometry per index
 scale-low 3					# low estimate for image scale
 scale-high 5					# high estimate for image scale
 scale-units app				# untis for image scale estimates
