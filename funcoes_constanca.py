@@ -20,7 +20,7 @@ import astropy.units as u
 PipelineDirectory = os.getcwd()
 day = "2022-03-20"
 DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
-Base='MAPA_SURV_4_085283_220417_114004+060023_scan047_01'
+Base='MAPA_SURV_4_085283_220417_114004+060023_scan047_04'
 config_file='ConfigurationDefesa.txt'
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
 config['LOGGER'] = int(config['LOGGER'])
@@ -220,16 +220,17 @@ def find_corr_in_list(pto, im_lst):
 	
 	for im_pto in im_lst:
 		
-		L1=[float(pto["DecCalculated"]),float(pto['RaCalculated'])]
+		L1=[float(pto[0]["DecCalculated"]),float(pto[0]['RaCalculated'])]
 		L2=[float(im_pto[0]['DecCalculated']),float(im_pto[0]['RaCalculated'])]
 		distance=AngleDifferenceLists(L1,L2)
+		print(distance)
 			
-		fwhm=[float(pto["FWHM"]),float(im_pto[0]['FWHM'])]
-			
-		if float(distance[0]) <= (4.7/3600)*max(fwhm) and float(distance[1]) <= (4.7/3600)*max(fwhm):
+		fwhm=[float(pto[0]["FWHM"]),float(im_pto[0]['FWHM'])]
+		print((4.7/3600)*max(fwhm))
+		# if float(distance[0]) <= (4.7/3600)*max(fwhm) and float(distance[1]) <= (4.7/3600)*max(fwhm):
 
-			corr_pto=im_pto[0]	
-			continue
+			# corr_pto=im_pto[0]	
+			# continue
 
 				
 	return corr_pto
@@ -241,6 +242,8 @@ def find_correspondence(DayDirectory,all_files):
 	This function is a list of dictionaries with all detections from all images. If the distance between two point 
 	(calculated by AngleDifferencePoints function) is less than a specific value, it means that the detections correspond
 	to the same object in different images, so they're stored in the same list.
+	It's important to notice that the algorithm is currently treating every object has a potencial space debris detection,
+	i.e the stars are not being distinguishable from the rest.
 	The following example clarifies the ouput of the function.
 
 	Example of input:
@@ -279,7 +282,8 @@ def find_correspondence(DayDirectory,all_files):
 					im3.append([i])
 				if i['image']  == '04':
 					im4.append([i])
-					
+		
+		
 	print(f'Image 1 has {len(im1)} objects.')
 	print(f'Image 2 has {len(im2)} objects.')
 	print(f'Image 3 has {len(im3)} objects.')
@@ -304,22 +308,22 @@ def find_correspondence(DayDirectory,all_files):
 	im_a_comparar.append(im2)
 	im_a_comparar.append(im3)
 	im_a_comparar.append(im4)
-
-	for c in im1: 
-		
-		for im in im_a_comparar: 
+	
+	#for c in im1: 
+	#	print(c)
+	for im in im_a_comparar: 
 			
-			ii = -1
-			while c[ii] == {}:
-				ii += -1
+		ii = -1
+		while im1[ii] == {}:
+			ii += -1
 				
-			pt_2_find_in_next_im= c[ii]
-			new_pt= find_corr_in_list(pt_2_find_in_next_im,im) #This function determines if these two points in different images are associated to the same object
+		pt_2_find_in_next_im= im1[ii]
+		new_pt= find_corr_in_list(pt_2_find_in_next_im,im) #This function determines if these two points in different images are associated to the same object
 
-			if new_pt == None:
-				continue
-			else:
-				c.append(new_pt)
+		if new_pt == None:
+			continue
+		else:
+			im1[ii].append(new_pt)
 	
 	print(len(im1))	
 	# # You now have an updated im1 list, with all elements associated with the objects from image 1 and their match in image 2,3 and 4.
@@ -446,4 +450,381 @@ def find_correspondence(DayDirectory,all_files):
 	return im1
 
 
-find_correspondence(DayDirectory,all_files)
+#find_correspondence(DayDirectory,all_files)
+
+################################################################################################################################
+#														Scattered plots
+################################################################################################################################
+
+
+def decdeg2dms(dd):
+    mult = -1 if dd < 0 else 1
+    mnt,sec = divmod(abs(dd)*3600, 60)
+    deg,mnt = divmod(mnt, 60)
+    return round(mult*deg), round(mult*mnt), float("{:.1f}".format(mult*sec))
+	
+	
+def alldetections(lst1,lst2):
+
+	number_detections_star=[]
+	number_detections_nonidnt_objs=[]
+	
+	colors_stars=[]
+	colors_nonidnt_objs=[]
+	
+
+	for i in lst1:
+		number_detections_star.append(len(i))
+
+	for i in number_detections_star:
+			if i==1:
+				black=(0.2,0.2,0.2)
+				colors_stars.append(black)
+			if i==2:
+				yellow=(1, 1, 0)
+				colors_stars.append(yellow)
+			if i==3:
+				blue=(0, 0.5, 1)
+				colors_stars.append(blue)
+			if i==4:
+				red=(1,0, 0)
+				colors_stars.append(red)
+
+		
+	
+	
+	for i in lst2:
+		number_detections_nonidnt_objs.append(len(i))
+	
+	for i in number_detections_nonidnt_objs:
+			if i==1:
+				black=(0.2,0.2,0.2)
+				colors_nonidnt_objs.append(black)
+			if i==2:
+				yellow=(1, 1, 0)
+				colors_nonidnt_objs.append(yellow)
+			if i==3:
+				blue=(0, 0.5, 1)
+				colors_nonidnt_objs.append(blue)
+			if i==4:
+				red=(1,0, 0)
+				colors_nonidnt_objs.append(red)
+			
+	x_stars=[]
+	y_stars=[]
+	for i in lst1:
+		x_stars.append(float(i[0]['Ra_calculated']))
+
+	
+
+	for i in lst1:
+		y_stars.append(float(i[0]['Dec_calculated']))
+	
+	
+	
+	x_nonidnt_objs=[]
+	y_nonidnt_objs=[]
+	for i in lst2:
+		x_nonidnt_objs.append(float(i[0]['Ra_calculated']))
+
+
+
+	for i in lst2:
+		y_nonidnt_objs.append(float(i[0]['Dec_calculated']))
+		
+	return x_stars,y_stars,x_nonidnt_objs,y_nonidnt_objs,colors_stars,colors_nonidnt_objs
+
+
+def separatedetections(lst1,lst2):	
+
+	len1_str=[]
+	len2_str=[]
+	len3_str=[]
+	len3_obj=[]
+	
+	for i in lst1:
+		if len(i)==1:
+			len1_str.append(i)
+		if len(i)==2:
+			len2_str.append(i)
+		if len(i)==3:
+			len3_str.append(i)
+
+	for i in lst2:
+		if len(i)==3:
+			len3_obj.append(i)
+
+	return len3_obj,len1_str,len2_str,len3_str
+
+
+def scatteredplot_colors():
+	
+	alldect=alldetections(lst_cors_stars,lst_cors_nonidnt_objs)
+	
+	
+	#scatter=plt.subplot(1, 2, 1)
+	plt.scatter(
+	x=alldect[0],
+	y=alldect[1],
+	c=alldect[4],
+	alpha=0.5, 
+	)
+	
+	my_xticks=[]
+	x=alldect[0]
+	x.sort()
+	for i in x:
+		my_xticks.append(decdeg2dms(i))
+
+
+	plt.xticks([x[0], x[-1]], [my_xticks[0], my_xticks[-1]],rotation=0,fontsize=8)
+	
+	my_yticks=[]
+	y=alldect[1]
+	y.sort()
+	for i in y:
+		my_yticks.append(decdeg2dms(i))
+	plt.yticks([y[0], y[-1]], [my_yticks[0], my_yticks[-1]],rotation=0,fontsize=8)
+	
+
+	#plt.title("All Stars")
+	#plt.ylabel('Dec (dms)')
+	#plt.xlabel('Ra (dms)')
+
+	#plt.subplot(1, 2, 2)
+	plt.scatter(
+		x=alldect[2],
+		y=alldect[3],
+		c=alldect[5],
+		alpha=0.5,
+	)
+	
+	my_xticks=[]
+	x=alldect[2]
+	x.sort()
+	for i in x:
+		my_xticks.append(decdeg2dms(i))
+
+
+	plt.xticks([x[0], x[-1]], [my_xticks[0], my_xticks[-1]],rotation=0,fontsize=8)
+	
+	my_yticks=[]
+	y=alldect[3]
+	y.sort()
+	for i in y:
+		my_yticks.append(decdeg2dms(i))
+	plt.yticks([y[0], y[-1]], [my_yticks[0], my_yticks[-1]],rotation=0,fontsize=8)
+	
+	#plt.title("Non-identified objects (black:1 , yellow:2 , blue:3 , red:4)")
+	plt.title("All Objects")
+	plt.ylabel('Dec (dms)')
+	plt.xlabel('Ra (dms)')
+	
+	plt.show()
+	
+
+			
+def scatterplotonedetection():
+	
+	detections=separatedetections(lst_cors_stars,lst_cors_nonidnt_objs)	
+	fontprops = fm.FontProperties(size=8)
+	fig, ax = plt.subplots()
+	
+	x=[]
+	y=[]
+	my_xticks=[]
+	my_yticks=[]
+	for i in detections[1]:
+		for j in i:
+			if j['image']=='1':
+
+				plt.scatter(
+					x=float(j['Ra_calculated']),
+					y=float(j['Dec_calculated']),
+					c='k',
+					marker='o',
+					alpha=0.25)
+				plt.annotate('1',(float(j['Ra_calculated']),float(j['Dec_calculated'])))
+			
+			if j['image']=='2':
+
+				plt.scatter(
+					x=float(j['Ra_calculated']),
+					y=float(j['Dec_calculated']),
+					c='k',
+					marker='o',
+					alpha=0.5,
+				)
+				plt.annotate('2',(float(j['Ra_calculated']),float(j['Dec_calculated'])))
+			
+			if j['image']=='3':
+
+				plt.scatter(
+					x=float(j['Ra_calculated']),
+					y=float(j['Dec_calculated']),
+					c='k',
+					marker='o',
+					alpha=0.75,
+				)
+				plt.annotate('3',(float(j['Ra_calculated']),float(j['Dec_calculated'])))
+			
+			if j['image']=='4':
+
+				plt.scatter(
+					x=float(j['Ra_calculated']),
+					y=float(j['Dec_calculated']),
+					c='k',
+					marker='o',
+					alpha=1,
+				)
+				plt.annotate('4',(float(j['Ra_calculated']),float(j['Dec_calculated'])))
+				
+			x.append(float(j['Ra_calculated']))
+		
+			y.append(float(j['Dec_calculated']))
+	
+			x.sort()
+			for i in x:
+				my_xticks.append(decdeg2dms(i))
+
+
+			plt.xticks([x[0], x[-1]], [my_xticks[0], my_xticks[-1]],rotation=0,fontsize=8)
+	
+			y.sort()
+			for i in y:
+				my_yticks.append(decdeg2dms(i))
+			plt.yticks([y[0], y[-1]], [my_yticks[0], my_yticks[-1]],rotation=0,fontsize=8)
+			
+			
+			
+	
+			scalebar = AnchoredSizeBar(ax.transData,
+                            75/3600, '(75 arcsec)', 'lower left', 
+                           pad=0.1,
+                           color='black',
+                           frameon=False,
+                           #size_vertical=1,
+                           fontproperties=fontprops)
+
+			ax.add_artist(scalebar)
+			plt.title("Objects detected in just 1 image")
+			plt.ylabel('Dec (dms)')
+			plt.xlabel('Ra (dms)')
+
+	plt.show()
+	
+	
+#scatteredplot_colors()
+#scatterplotonedetection()
+
+
+################################################################################################################################
+#														Movement plots
+################################################################################################################################
+
+def plot_detection_movement(detections):
+	
+	x=[]
+	y=[]
+	x_dms=[]
+	y_dms=[]
+	
+	image=0
+	
+	for i in detections:
+		x.clear()
+		y.clear()
+		x_dms.clear()
+		y_dms.clear()
+		
+		for n in i:
+			
+			point_x=(n['alt'])
+			x.append(point_x)
+			
+			point_x_dms=(decdeg2dms(point_x))
+			
+			x_dms.append(str(point_x_dms))
+			
+		
+			
+			point_y=(n['az'])
+			y.append(point_y)
+			
+			point_y_dms=(decdeg2dms(point_y))
+			y_dms.append(str(point_y_dms))
+			
+		
+		image+=1
+		text = ["1", "2", "3", "4"]
+		plt.plot(x, y,color='green', linestyle='dashed', linewidth = 3, marker='o', markerfacecolor='blue', markersize=4)
+		for i in range(len(x)):
+			plt.annotate(text[i], (x[i], y[i]))
+		
+		my_xticks = x_dms
+		plt.xticks(x, my_xticks,rotation=45,fontsize=8)
+		my_yticks = y_dms
+		plt.yticks(y, my_yticks,rotation=0,fontsize=8)
+		
+	
+		a=min(x)+(max(x)-min(x))/2
+		b=min(y)+(max(y)-min(y))/2
+		
+		numx=(2*60)/(3600*2) #já estou a fazer metade aqui
+		numy=(6*60)/(3600*2)  #já estou a fazer metade aqui 
+		#num=(0.015*60)/(3600*2)
+		plt.xlim(a-numx,a+numx)
+		plt.ylim(b-numy,b+numy)
+
+		
+		plt.title(f'Star {image}')
+		plt.ylabel(f'Az (degrees,min,sec)')
+		plt.xlabel(f'Alt (degrees,min,sec)')
+		plt.show()
+
+
+################################################################################################################################
+#														Image plots
+################################################################################################################################
+
+def plot_detections_in_image(Base,DayDirectory):
+	
+	'''
+	Function created to plot the image being analysed and draw the detections on top of it, according to json output file
+	
+	INPUTS:
+	all_files			->   A list of every sextrator file in str type
+	DayDirectory		->   Directory 
+	
+	FILES CREATED:
+	NONE
+	'''
+	
+	
+	with open(f"{DayDirectory + '/OutputFiles/' + Base}.json", 'r') as stream:
+		jsonfile = json.load(stream)
+	
+	
+	fig = plt.figure()
+	ax = fig.add_subplot(111) 
+
+
+	Imagem = CCDData.read(f"{DayDirectory  + '/ProcessedImages/' + Base}.fits", unit = 'adu') 
+	plt.imshow(Imagem,cmap='gray')
+	plt.title(f'Imagem{Base[-1]}')
+	
+
+	for i in jsonfile:
+		c1 = plt.Circle((float(i['Xdetect']),float(i['Ydetect'])),4, color = 'red', linewidth=2,fill=False)
+		ax.add_patch(c1)
+		
+	plt.show()
+	
+	return True
+
+#plot_detections_in_image(Base,DayDirectory)
+
+
+################################################################################################################################
+#								RASCUNHOS : NÃO COLOCAR NO SPADEFunctions.py AINDA
+################################################################################################################################
