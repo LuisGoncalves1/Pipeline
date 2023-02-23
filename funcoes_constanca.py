@@ -20,10 +20,11 @@ import astropy.units as u
 PipelineDirectory = os.getcwd()
 day = "2022-03-20"
 DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
-Base='MAPA_SURV_4_085283_220417_114004+060023_scan047_04'
+Base='MAPA_SURV_4_085283_220417_114004+060023_scan047_01'
 config_file='ConfigurationDefesa.txt'
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
 config['LOGGER'] = int(config['LOGGER'])
+scale_arcsec=4.7
 all_files=['MAPA_SURV_4_085283_220417_114004+060023_scan047_01','MAPA_SURV_4_085283_220417_114004+060023_scan047_02',
 'MAPA_SURV_4_085283_220417_114004+060023_scan047_03','MAPA_SURV_4_085283_220417_114004+060023_scan047_04']
 
@@ -79,7 +80,7 @@ def WriteAstrometryOutput_Json(Base,DayDirectory,X,Y,Detections, DetectionsMags,
 	'''
 	Creates a json Output File with information about detections from Astrometry:
 	X,Y,(Ra,Dec) calculated, (Ra,Dec) catalogue, Mag calculated, Mag catalogue, FWHM, Altitude and Azimuthe. 
-	The FWHM is the mean FWHM associated to each image (This information is in the image header)
+	The FWHM is the mean FWHM associated to each image 
 	
 	To run this function:
 	X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = SPADEFunctions.CatalogComparison(Base,PipelineDirectory,DayDirectory,config)
@@ -189,6 +190,7 @@ def AngleDifferencePoints(Coord1,Coord2):
 	
 
 	difference = np.arccos(np.sin(Dec1)*np.sin(Dec2)+np.cos(Dec1)*np.cos(Dec2)*np.cos(Ra1-Ra2)) 
+	
 	return np.degrees(difference)
 	
 def AngleDifferenceLists(L1,L2):
@@ -204,6 +206,7 @@ def AngleDifferenceLists(L1,L2):
 		Coord2 = [L2[i],L2[i]]
 		Dists.append(AngleDifferencePoints(Coord1,Coord2))
 	
+	
 	return np.array(Dists)
 
 
@@ -214,36 +217,44 @@ def AngleDifferenceLists(L1,L2):
 #################################################################################################################################
 
 
-def find_corr_in_list(pto, im_lst):
+def criteria(pto, im_lst,scale_arcsec):
 	
 	corr_pto=None
 	
 	for im_pto in im_lst:
-		
-		L1=[float(pto[0]["DecCalculated"]),float(pto[0]['RaCalculated'])]
-		L2=[float(im_pto[0]['DecCalculated']),float(im_pto[0]['RaCalculated'])]
-		distance=AngleDifferenceLists(L1,L2)
-		print(distance)
-			
-		fwhm=[float(pto[0]["FWHM"]),float(im_pto[0]['FWHM'])]
-		print((4.7/3600)*max(fwhm))
-		# if float(distance[0]) <= (4.7/3600)*max(fwhm) and float(distance[1]) <= (4.7/3600)*max(fwhm):
 
-			# corr_pto=im_pto[0]	
-			# continue
+		L1=[float(pto[0]['RaCalculated']),float(pto[0]['DecCalculated'])]
+		L2=[float(im_pto['RaCalculated']),float(im_pto['DecCalculated'])]
+		distance=AngleDifferencePoints(L1,L2)
+	
+		fwhm=[float(pto[0]["FWHM"]),float(im_pto['FWHM'])]
 
-				
+		if float(distance) <= (scale_arcsec*max(fwhm))/3600:
+			corr_pto=im_pto	
+			continue
+
 	return corr_pto
 
+def find_correspondence(fix_list,image,scale_arcsec,next_image):
+	for c in fix_list:
+		  for i in range(next_image,len(image)): 
+			  for im in image[i]:
+				  pt_2_find_in_next_im = c
+				  new_pt= criteria(pt_2_find_in_next_im,im,scale_arcsec) 
+				  if new_pt == None:
+					  continue
+				  else:
+					  c.append(new_pt)
+	return fix_list
 
-def find_correspondence(DayDirectory,all_files):
+def associate_images(DayDirectory,all_files,scale_arcsec):
 	
 	'''	
 	This function is a list of dictionaries with all detections from all images. If the distance between two point 
 	(calculated by AngleDifferencePoints function) is less than a specific value, it means that the detections correspond
 	to the same object in different images, so they're stored in the same list.
 	It's important to notice that the algorithm is currently treating every object has a potencial space debris detection,
-	i.e the stars are not being distinguishable from the rest.
+	i.e the stars are not being distinguished from the rest.
 	The following example clarifies the ouput of the function.
 
 	Example of input:
@@ -257,200 +268,61 @@ def find_correspondence(DayDirectory,all_files):
 	
 	FILES CREATED:
 	None
-
 	'''
-	print('[+] Start analysing data.')
 	
+	obj = [[] for i in range(0,len(all_files))]
+	print(f'[+] Start analysing data of {len(obj)} images.')
 	
-	# Stores the data in 4 different lists, associated with each image
-	
-	im1=[]
-	im2=[]
-	im3=[]
-	im4=[]
-	
+
+	count=0
 	for ficheiro in all_files:
 		with open(f"{DayDirectory + '/OutputFiles/' + ficheiro}.json", 'r') as stream:
 			jsonfile = json.load(stream)
-
 			for i in jsonfile:
-				if i['image'] == '01':
-					im1.append([i])
-				if i['image']  == '02':
-					im2.append([i])
-				if i['image']  == '03':
-					im3.append([i])
-				if i['image']  == '04':
-					im4.append([i])
-		
-		
-	print(f'Image 1 has {len(im1)} objects.')
-	print(f'Image 2 has {len(im2)} objects.')
-	print(f'Image 3 has {len(im3)} objects.')
-	print(f'Image 4 has {len(im4)} objects.')
+				obj[count].append([i])
+			count+=1
 	
-	
-	soma=len(im1)
+	for i in range(0,len(all_files)):
+		print(f'Image{all_files[i][-1]} has {len(obj[i])} objects.')
+		
+	#obj=sorted(obj, key=len,reverse=True)
+	next_image=1
+	correspondences=obj[0]
+	print(len(correspondences))
+	correspondences=find_correspondence(correspondences,obj,scale_arcsec,next_image)
+	print(len(correspondences))
 
 	
-	# In the following part, the algorithm fixates the elements of the list associated with image 1 and tries to find matches
-	# with the objects in the image 2,3 and 4. If a match is found, the list associated with that element will 
-	# extend with the data from other images.
-	
-	# EXAMPLE:
-	# Before comparing im1 with im2,im3,im4 --->  im1=[[{ptA1}],[{ptB1}]]
-	# After comparing im1 with im2,im3,im4 --->  im1=[[{ptA1},{ptA2},{ptA4}],[{ptB1}]]
-	#This means that:
-	# - Point A in image 1 is found also in image 2 and 4. 
-	# - Point B only exists in image 1
-	
-	im_a_comparar=[]
-	im_a_comparar.append(im2)
-	im_a_comparar.append(im3)
-	im_a_comparar.append(im4)
-	
-	#for c in im1: 
-	#	print(c)
-	for im in im_a_comparar: 
-			
-		ii = -1
-		while im1[ii] == {}:
-			ii += -1
-				
-		pt_2_find_in_next_im= im1[ii]
-		new_pt= find_corr_in_list(pt_2_find_in_next_im,im) #This function determines if these two points in different images are associated to the same object
+	while next_image<len(obj):
+		
+		idx=[]
+		img=obj[next_image]
+		for d in img: 
+			for c in correspondences:
+				for i in range (0,len(c)):
+					if c[i]['image'] == d[0]['image'] and c[i]['DecCalculated'] == d[0]['DecCalculated']: #significa que está
+						index = obj[next_image].index(d)
+						idx.append(index)
+					
 
-		if new_pt == None:
-			continue
+		for index in sorted(idx, reverse=True): 
+			del img[index]
+		
+		
+		if next_image == len(obj)-1:
+			correspondences.extend(img)
+			next_image+=1
 		else:
-			im1[ii].append(new_pt)
-	
-	print(len(im1))	
-	# # You now have an updated im1 list, with all elements associated with the objects from image 1 and their match in image 2,3 and 4.
-	# # It's important to note that an object may not be present in image 1 and appear in image 2,3 and 4.
-	# # Therefore, it's important to repit the same analysis, only now fixating the elements from image 2 that weren't matched
-	# # with any element from image 1, and compare them with image 3 and 4.
-	# # For that, the following steps where taken:
-	
-	# # The algoritm stores the indexs of the elements of image 2 that where matched with detections from image 1
-	
-	# idx=[]
-	# for d in im2: 
-		# for c in im1:
-			# for i in range (0,len(c)):
-				# if c[i]['image'] == '2' and c[i]['Dec_calculated'] == d[0]['Dec_calculated']: #significa que está
-					# index = im2.index(d)
-					# idx.append(index)
-	
-	
-	# # With the indexes, the algoritm delets all elements from image 2 that were already matched with elements from image 1.
+			next_image+=1
+			cors=find_correspondence(img,obj,scale_arcsec,next_image)
+			correspondences.extend(cors)
+			
+	return correspondences
 
-	# for index in sorted(idx, reverse=True): 
-		# del im2[index]
-	# soma+=len(im2)
-	
-	# print(f'Image 2 has {len(im2)} objects that do not have a match in image 1.')
-	
-	
-	# # As before, the algoritm fixates the elements of the list associated with image 2 and tries to find any matches
-	# # with the objects in the image 3 and 4. If a match is found, im1 list is updated.
-	
-	# # EXAMPLE:
-	# # im1 before im2 being compared with im3 and im4  --->  im1=[[{ptA1},{ptA2},{ptA4}],[{ptB1}]]
-	# # After comparing im2 with im3,im4 --->  im1=[[{ptA1},{ptA2},{ptA4}],[{ptB1}],[{ptC2},{ptC3},{ptC4}],[{ptD2},{ptD3}]]
-	
-	# #This means that:
-	# # - Point A in image 1 is found also in image 2 and 4. 
-	# # - Point B only exists in image 1
-	# # - Point C exists in image 2,3 and 4
-	# # - Point D exists in image 2 and 3
-	
-	
-	# im_a_comparar=[]
-	# im_a_comparar.append(im3)
-	# im_a_comparar.append(im4)
-
-	
-	# for c in im2: 
 		
-		# for im in im_a_comparar: 
-			
-			# ii = -1
-			# while c[ii] == {}:
-				# ii += -1
-				
-			# pt_2_find_in_next_im= c[ii]
-			# new_pt= find_corr_in_list(pt_2_find_in_next_im,im)
-			
-			# if new_pt == None:
-				# continue
-			# else:
-				# c.append(new_pt)
-			
-	# im1.extend(im2)
+associate_images(DayDirectory,all_files,scale_arcsec)
 	
-	
-	# # As before, the algoritm stores the indexes of the elements of image 3 that where matched with detections from im1 list
-	# idx=[]
-	# for d in im3: 
-		# for c in im1:
-			# for i in range (0,len(c)):
-				# if c[i]['image'] == '3' and c[i]['Dec_calculated'] == d[0]['Dec_calculated']:
-					# index = im3.index(d)
-					# idx.append(index)
-	
-	# # With the indexes, the algoritm delets all elements from image 3 that were already matched with elements from im1 list
-	
-	# for index in sorted(idx, reverse=True): 
-		# del im3[index]
-	# soma+=len(im3)
-	# print(f'Image 3 has {len(im3)} objects that do not have a match in image 1 and 2.')
-	
-	# im_a_comparar=[]
-	# im_a_comparar.append(im4)
-	
-	# for c in im3: 
-		
-		# for im in im_a_comparar: 
-			
-			# ii = -1
-			# while c[ii] == {}:
-				# ii += -1
-				
-			# pt_2_find_in_next_im= c[ii]
-			# new_pt= find_corr_in_list(pt_2_find_in_next_im,im)
-			
-			# if new_pt == None:
-				# continue
-			# else:
-				# c.append(new_pt)
-				
-	# im1.extend(im3)
 
-	
-	# idx=[]
-	# for d in im4: 
-		# for c in im1:
-			# for i in range (0,len(c)):
-				# if c[i]['image'] == '4' and c[i]['Dec_calculated'] == d[0]['Dec_calculated']:
-					# index = im4.index(d)
-					# idx.append(index)
-
-	# for index in sorted(idx, reverse=True): 
-		# del im4[index]
-	# soma+=len(im4)	
-	# print(f'Image 4 has {len(im4)} objects that do not have a match in image 1, 2 and 3.')
-	
-	# im1.extend(im4)
-	
-	# print(f'The total number of detections and their corresponding matches is {len(im1)}')
-	# print(f'This result is correct if {len(im1)} is equal to {soma}')
-	
-	
-	return im1
-
-
-#find_correspondence(DayDirectory,all_files)
 
 ################################################################################################################################
 #														Scattered plots
