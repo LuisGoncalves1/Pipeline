@@ -20,11 +20,10 @@ import astropy.units as u
 PipelineDirectory = os.getcwd()
 day = "2022-03-20"
 DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
-Base='MAPA_SURV_4_085283_220417_114004+060023_scan047_01'
+Base='MAPA_SURV_4_085283_220417_114004+060023_scan047_03'
 config_file='ConfigurationDefesa.txt'
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
 config['LOGGER'] = int(config['LOGGER'])
-scale_arcsec=4.7
 all_files=['MAPA_SURV_4_085283_220417_114004+060023_scan047_01','MAPA_SURV_4_085283_220417_114004+060023_scan047_02',
 'MAPA_SURV_4_085283_220417_114004+060023_scan047_03','MAPA_SURV_4_085283_220417_114004+060023_scan047_04']
 
@@ -32,9 +31,11 @@ all_files=['MAPA_SURV_4_085283_220417_114004+060023_scan047_01','MAPA_SURV_4_085
 # These functions create json files for Sextractor and Astrometry data and add Alt,Az information
 ##################################################################################################################################
 
+	
+
 
 def WriteSextractorFile_Json(DayDirectory,all_files):
-	
+
 	'''
 	Function created to read catalogue created from sextractor in json type. It outputs 
 	a list of dictionaries with the information related to each column as values of keys
@@ -46,9 +47,6 @@ def WriteSextractorFile_Json(DayDirectory,all_files):
 	FILES CREATED:
 	SExtractorOutput.json
 	'''
-	
-	print('[+] Extracting SExtractor Output from .cat file')
-	
 	
 	SEx_directory = DayDirectory + '/SextractorCatalogue/'
 	
@@ -63,19 +61,28 @@ def WriteSextractorFile_Json(DayDirectory,all_files):
 		for i in A[1].data:
 			tmp_dict = {}
 			tmp_dict['image']= str(ficheiro[-2])+str(ficheiro[-1])
+			tmp_dict['number'] = str(i[0])
+			tmp_dict['Flux_isocor'] = str(i[1])
+			tmp_dict['Mag_isocor'] = str(i[2])
+			tmp_dict['MagErr_isocor'] = str(i[3])
+			tmp_dict['Flux_aper'] = str(i[4])
+			tmp_dict['FluxErr_aper'] = str(i[5])
 			tmp_dict['x_image'] = str(i[6])
 			tmp_dict['y_image'] = str(i[7])
-			tmp_dict['WIN_SNR'] = str(i[12])
+			tmp_dict['Flags'] = str(i[8])
+			tmp_dict['FWHM_Image'] = str(i[9])
+			tmp_dict['Elongation'] = str(i[10])
+			tmp_dict['Flux_Radius'] = str(i[11])
+			tmp_dict['SNR_WIN'] = str(i[12])
 			lst_jsonfile.append(tmp_dict)
 	
 	with open('SExtractorOutput.json', 'w') as f:
 		json.dump(lst_jsonfile, f, indent=3)
 
-	print('[+] SExtractor output sucessfully extracted to SExtractorOutput.json file')
 
 #WriteSextractorFile_Json(DayDirectory,all_files)
 
-def WriteAstrometryOutput_Json(Base,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
+def WriteAstrometryOutput_Json(Base,DayDirectory,PipelineDirectory,config_file,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
 	
 	'''
 	Creates a json Output File with information about detections from Astrometry:
@@ -95,16 +102,50 @@ def WriteAstrometryOutput_Json(Base,DayDirectory,X,Y,Detections, DetectionsMags,
 	
 	'''
 	
-	print('[+] Extracting Output data from Astrometry')
-	
 	items_2_store=[]
 	
-	#The location where the images were taken is necessary to convert Ra,Dec coordinates to Alt,Az
+
+	location_data={}
+	with open(PipelineDirectory+"/Files/Config/" + config_file,'r') as f:
+		lines = f.readlines()
+		for i in lines:
+			sentence=i.strip()
+			word_lst=sentence.split()
+			if len(word_lst)>1:
+				if word_lst[0]=='Longitude':
+						location_data['Longitude']=float(word_lst[1])
+				if word_lst[0]=='Latitude':
+						location_data['Latitude']=float(word_lst[1])
+				if word_lst[0]=='Height':
+						location_data['Height']=float(word_lst[1])
+
 	location=EarthLocation(
-			lat=40.182524*u.deg,
-			lon=-7.873811*u.deg,
-			height=820*u.m)
+			lat=location_data['Latitude']*u.deg,
+			lon=location_data['Longitude']*u.deg,
+			height=location_data['Height']*u.m)
+			
+			
+	Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + Base}.fits", unit = 'adu') 
+				
 	
+						
+	Day=Data.header['Date'].split("/")
+	
+
+	for i in Day: 
+		if i[0]=='0':
+			idx=Day.index(i)
+			Day[idx]=i[1]
+
+	Time_UT=Data.header['UT'].split(":")
+
+	for i in Time_UT:
+		if i[0]=='0':
+			idx=Time_UT.index(i)
+			Time_UT[idx]=i[1]
+			
+	year='20'+Day[2]
+	time = datetime.datetime(int(year),int(Day[1]),int(Day[0]),int(Time_UT[0]),int(Time_UT[1]),int(Time_UT[2]))
 	
 	for i in range(len(Detections)):
 		
@@ -112,6 +153,7 @@ def WriteAstrometryOutput_Json(Base,DayDirectory,X,Y,Detections, DetectionsMags,
 			
 			items={}
 			items['image']=str(Base[-2])+str(Base[-1])
+			items['FWHM'] =Data.header['FWHM']	
 			items['Xdetect']=str(X[i])
 			items['Ydetect']= str(Y[i])
 			items['RaCalculated'] = str(Detections.ra[i].value)
@@ -132,22 +174,8 @@ def WriteAstrometryOutput_Json(Base,DayDirectory,X,Y,Detections, DetectionsMags,
 				items['Match']= '0'
 				items['MagInst '] = str(DetectionsMags[i])
 				items['MagReal'] ='0'
-
-
-			if Base[-1]=="1":
-				items['FWHM'] = "2.53222818375E+000"
-				time = datetime.datetime(2022, 4, 17,23,47,53)  
-			if Base[-1]=="2":
-				items['FWHM'] = "1.83843030334E+000"
-				time = datetime.datetime(2022, 4, 17,23,47,58)  
-			if Base[-1]=="3":
-				items['FWHM'] = "1.57364977002E+000"
-				time = datetime.datetime(2022, 4, 17,23,48,3)  
-			if Base[-1]=="4":
-				time = datetime.datetime(2022, 4, 17,23,48,8)  
-				items['FWHM'] = "1.63440303802E+000"
-				
 			
+
 			dec=(Detections.dec[i].value)*u.deg
 			ra=(Detections.ra[i].value)*u.deg
 			stars = SkyCoord(ra, dec, frame='icrs')
@@ -167,12 +195,11 @@ def WriteAstrometryOutput_Json(Base,DayDirectory,X,Y,Detections, DetectionsMags,
 			with open(f"{DayDirectory + '/OutputFiles/' + Base}.json", 'w') as f: 
 				json.dump(items_2_store, f, indent=3)
 				
-	print('[+] Json file created in OutputFiles folder')
 
 
 
 #X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = SPADEFunctions.CatalogComparison(Base,PipelineDirectory,DayDirectory,config)
-#WriteAstrometryOutput_Json(Base,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
+#WriteAstrometryOutput_Json(Base,DayDirectory,PipelineDirectory,config_file,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
 
 
 ##################################################################################################################################
@@ -217,9 +244,12 @@ def AngleDifferenceLists(L1,L2):
 #################################################################################################################################
 
 
-def criteria(pto, im_lst,scale_arcsec):
+def criteria(pto, im_lst,DayDirectory,Base):
 	
 	corr_pto=None
+	
+	Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + Base}.fits", unit = 'adu') 
+	scale=float(Data.header['SCALE'])
 	
 	for im_pto in im_lst:
 
@@ -229,25 +259,25 @@ def criteria(pto, im_lst,scale_arcsec):
 	
 		fwhm=[float(pto[0]["FWHM"]),float(im_pto['FWHM'])]
 
-		if float(distance) <= (scale_arcsec*max(fwhm))/3600:
+		if float(distance) <= ((scale)*max(fwhm))/3600:
 			corr_pto=im_pto	
 			continue
 
 	return corr_pto
 
-def find_correspondence(fix_list,image,scale_arcsec,next_image):
+def find_correspondence(fix_list,image,next_image):
 	for c in fix_list:
-		  for i in range(next_image,len(image)): 
+		  for i in range(next_image+1,len(image)): 
 			  for im in image[i]:
 				  pt_2_find_in_next_im = c
-				  new_pt= criteria(pt_2_find_in_next_im,im,scale_arcsec) 
+				  new_pt= criteria(pt_2_find_in_next_im,im) 
 				  if new_pt == None:
 					  continue
 				  else:
 					  c.append(new_pt)
 	return fix_list
 
-def associate_images(DayDirectory,all_files,scale_arcsec):
+def associate_images(DayDirectory,all_files):
 	
 	'''	
 	This function is a list of dictionaries with all detections from all images. If the distance between two point 
@@ -270,10 +300,11 @@ def associate_images(DayDirectory,all_files,scale_arcsec):
 	None
 	'''
 	
+	#Created a list of N lists. N is the number of images being analysed
 	obj = [[] for i in range(0,len(all_files))]
 	print(f'[+] Start analysing data of {len(obj)} images.')
 	
-
+	#Appends data from image 1 to list of index 0, image 2 to index [1].....,image N to index[N-1]
 	count=0
 	for ficheiro in all_files:
 		with open(f"{DayDirectory + '/OutputFiles/' + ficheiro}.json", 'r') as stream:
@@ -281,18 +312,20 @@ def associate_images(DayDirectory,all_files,scale_arcsec):
 			for i in jsonfile:
 				obj[count].append([i])
 			count+=1
-	
+			
+	#Informs the user of the number os detections in each image
 	for i in range(0,len(all_files)):
 		print(f'Image{all_files[i][-1]} has {len(obj[i])} objects.')
 		
-	#obj=sorted(obj, key=len,reverse=True)
-	next_image=1
-	correspondences=obj[0]
-	print(len(correspondences))
-	correspondences=find_correspondence(correspondences,obj,scale_arcsec,next_image)
-	print(len(correspondences))
-
 	
+	#In this part, the algoritm fixates a point of image 1 and compares it to all points in the other images. This is done by
+	#find_correspondence function. 
+	
+	next_image=1 
+	correspondences=obj[0]
+	correspondences=find_correspondence(correspondences,obj,next_image)
+	
+
 	while next_image<len(obj):
 		
 		idx=[]
@@ -320,9 +353,8 @@ def associate_images(DayDirectory,all_files,scale_arcsec):
 	return correspondences
 
 		
-associate_images(DayDirectory,all_files,scale_arcsec)
-	
-
+#correspondences=associate_images(DayDirectory,all_files,scale_arcsec)
+#print(correspondences)
 
 ################################################################################################################################
 #														Scattered plots
@@ -336,75 +368,84 @@ def decdeg2dms(dd):
     return round(mult*deg), round(mult*mnt), float("{:.1f}".format(mult*sec))
 	
 	
-def alldetections(lst1,lst2):
+def scattered_plot_parameters(lst):
 
-	number_detections_star=[]
-	number_detections_nonidnt_objs=[]
-	
-	colors_stars=[]
-	colors_nonidnt_objs=[]
-	
+	colors_detections=[]	
+	for i in lst:
+		if len(i)==1:
+			black=(0.2,0.2,0.2)
+			colors_detections.append(black)
+		if len(i)==2:
+			yellow=(1, 1, 0)
+			colors_detections.append(yellow)
+		if len(i)==3:
+			blue=(0, 0.5, 1)
+			colors_detections.append(blue)
+		if len(i)==4:
+			red=(1,0, 0)
+			colors_detections.append(red)
 
-	for i in lst1:
-		number_detections_star.append(len(i))
+	x=[]
+	y=[]
+	for i in lst:
+		x.append(float(i[0]['RaCalculated']))
 
-	for i in number_detections_star:
-			if i==1:
-				black=(0.2,0.2,0.2)
-				colors_stars.append(black)
-			if i==2:
-				yellow=(1, 1, 0)
-				colors_stars.append(yellow)
-			if i==3:
-				blue=(0, 0.5, 1)
-				colors_stars.append(blue)
-			if i==4:
-				red=(1,0, 0)
-				colors_stars.append(red)
-
+	for i in lst:
+		y.append(float(i[0]['DecCalculated']))
 		
-	
-	
-	for i in lst2:
-		number_detections_nonidnt_objs.append(len(i))
-	
-	for i in number_detections_nonidnt_objs:
-			if i==1:
-				black=(0.2,0.2,0.2)
-				colors_nonidnt_objs.append(black)
-			if i==2:
-				yellow=(1, 1, 0)
-				colors_nonidnt_objs.append(yellow)
-			if i==3:
-				blue=(0, 0.5, 1)
-				colors_nonidnt_objs.append(blue)
-			if i==4:
-				red=(1,0, 0)
-				colors_nonidnt_objs.append(red)
-			
-	x_stars=[]
-	y_stars=[]
-	for i in lst1:
-		x_stars.append(float(i[0]['Ra_calculated']))
-
-	
-
-	for i in lst1:
-		y_stars.append(float(i[0]['Dec_calculated']))
-	
-	
-	
-	x_nonidnt_objs=[]
-	y_nonidnt_objs=[]
-	for i in lst2:
-		x_nonidnt_objs.append(float(i[0]['Ra_calculated']))
+	return x,y,colors_detections
 
 
 
-	for i in lst2:
-		y_nonidnt_objs.append(float(i[0]['Dec_calculated']))
-		
-	return x_stars,y_stars,x_nonidnt_objs,y_nonidnt_objs,colors_stars,colors_nonidnt_objs
+def scatteredplot_all_detections(lst):
+	
+	alldect=scattered_plot_parameters(lst)
+	
+	
+	plt.scatter(
+	x=alldect[0],
+	y=alldect[1],
+	c=alldect[2],
+	alpha=0.5, 
+	)
+	
+	my_xticks=[]
+	x=alldect[0]
+	x.sort()
+	for i in x:
+		my_xticks.append(decdeg2dms(i))
+
+
+	plt.xticks([x[0], x[-1]], [my_xticks[0], my_xticks[-1]],rotation=0,fontsize=8)
+	
+	my_yticks=[]
+	y=alldect[1]
+	y.sort()
+	for i in y:
+		my_yticks.append(decdeg2dms(i))
+	plt.yticks([y[0], y[-1]], [my_yticks[0], my_yticks[-1]],rotation=0,fontsize=8)
+	
+	
+	plt.title("All Objects")
+	plt.ylabel('Dec (dms)')
+	plt.xlabel('Ra (dms)')
+	
+	plt.show()
+	
+	
+#scatteredplot_all_detections(correspondences)
+
+
+
+
+
+
+
+
+
+################################################################################################################################
+#								RASCUNHOS : NÃO COLOCAR NO SPADEFunctions.py AINDA
+################################################################################################################################
 
 
 def separatedetections(lst1,lst2):	
@@ -429,70 +470,6 @@ def separatedetections(lst1,lst2):
 	return len3_obj,len1_str,len2_str,len3_str
 
 
-def scatteredplot_colors():
-	
-	alldect=alldetections(lst_cors_stars,lst_cors_nonidnt_objs)
-	
-	
-	#scatter=plt.subplot(1, 2, 1)
-	plt.scatter(
-	x=alldect[0],
-	y=alldect[1],
-	c=alldect[4],
-	alpha=0.5, 
-	)
-	
-	my_xticks=[]
-	x=alldect[0]
-	x.sort()
-	for i in x:
-		my_xticks.append(decdeg2dms(i))
-
-
-	plt.xticks([x[0], x[-1]], [my_xticks[0], my_xticks[-1]],rotation=0,fontsize=8)
-	
-	my_yticks=[]
-	y=alldect[1]
-	y.sort()
-	for i in y:
-		my_yticks.append(decdeg2dms(i))
-	plt.yticks([y[0], y[-1]], [my_yticks[0], my_yticks[-1]],rotation=0,fontsize=8)
-	
-
-	#plt.title("All Stars")
-	#plt.ylabel('Dec (dms)')
-	#plt.xlabel('Ra (dms)')
-
-	#plt.subplot(1, 2, 2)
-	plt.scatter(
-		x=alldect[2],
-		y=alldect[3],
-		c=alldect[5],
-		alpha=0.5,
-	)
-	
-	my_xticks=[]
-	x=alldect[2]
-	x.sort()
-	for i in x:
-		my_xticks.append(decdeg2dms(i))
-
-
-	plt.xticks([x[0], x[-1]], [my_xticks[0], my_xticks[-1]],rotation=0,fontsize=8)
-	
-	my_yticks=[]
-	y=alldect[3]
-	y.sort()
-	for i in y:
-		my_yticks.append(decdeg2dms(i))
-	plt.yticks([y[0], y[-1]], [my_yticks[0], my_yticks[-1]],rotation=0,fontsize=8)
-	
-	#plt.title("Non-identified objects (black:1 , yellow:2 , blue:3 , red:4)")
-	plt.title("All Objects")
-	plt.ylabel('Dec (dms)')
-	plt.xlabel('Ra (dms)')
-	
-	plt.show()
 	
 
 			
@@ -696,7 +673,3 @@ def plot_detections_in_image(Base,DayDirectory):
 
 #plot_detections_in_image(Base,DayDirectory)
 
-
-################################################################################################################################
-#								RASCUNHOS : NÃO COLOCAR NO SPADEFunctions.py AINDA
-################################################################################################################################
