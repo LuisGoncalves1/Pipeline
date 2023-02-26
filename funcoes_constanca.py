@@ -12,7 +12,7 @@ import datetime
 import astropy.units as u
 import requests
 from skyfield.api import EarthSatellite
-from skyfield.api import load, wgs84
+from skyfield.api import load, wgs84,utc
 
 
 ##################################################################################################################################
@@ -23,7 +23,7 @@ from skyfield.api import load, wgs84
 PipelineDirectory = os.getcwd()
 day = "2022-03-20"
 DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
-Base='MAPA_SURV_4_085283_220417_114004+060023_scan047_01'
+Base='MAPA_SURV_4_085283_220417_114004+060023_scan047_04'
 config_file='ConfigurationDefesa.txt'
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
 config['LOGGER'] = int(config['LOGGER'])
@@ -60,9 +60,7 @@ def AngleDifferenceLists(L1,L2):
 #The following information needs to be included in the main code
 ##################################################################################################################################
 
-
 Links=['https://celestrak.org/NORAD/elements/gp.php?SPECIAL=gpz-plus&FORMAT=tle']
-
 
 ##################################################################################################################################
 # 								 OUTPUT FILES, HEADER INFORMATION, CONFIG FILE INFORMATION
@@ -86,6 +84,8 @@ def files(DayDirectory):
 	for ficheiro in os.listdir(path=DayDirectory + '/ProcessedImages/'):				
 		ficheiro=ficheiro[:-5]
 		all_files.append(ficheiro)
+		
+	all_files.sort()
 		
 	return all_files
 	
@@ -163,61 +163,69 @@ def LatLonHei_information(PipelineDirectory,config_file):
 						location_data['Height']=float(word_lst[1])
 	return location_data
 
-def Header_information(DayDirectory,Base):
+def Header_information(DayDirectory):
 	'''
-	Function created to store header information (time,date,scale,fwhm)
+	Function created to store header information (time,date,scale,fwhm,dimensions) of all files
 	
 	INPUTS:
 	DayDirectory		->   directory of the present day									(str)
 	Base 				-> image directory to give to sextractor				     		(str)
 	
 	RETURNS:
-	Header_information	->   Time, date, scale, fwhm										(dic)
+	header	->   Time, date, scale, fwhm, image pixel dimensions			(list of dicts)
 	
 	FILES CREATED:
 	None
 	'''
-	
-	Header_information={}
-	Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + Base}.fits", unit = 'adu') 
+	header=[]
+	all_files=files(DayDirectory)
+
+	for ficheiro in all_files:
+		Header_information={}
+		Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + ficheiro}.fits", unit = 'adu') 
+		Header_information['Image'] =ficheiro[-2]+ficheiro[-1]
+		Header_information['FWHM'] =Data.header['FWHM']
+		Header_information['Dimensions'] =Data.header['NAXIS1']
+		Header_information['Scale']=float(Data.header['SCALE'])
+		Header_information['Alt']=float(Data.header['ALTUR'])
+		Header_information['Az']=float(Data.header['AZIMUTH'])
 					
-	Day=Data.header['Date'].split("/")
-	for i in Day: 
-		if i[0]=='0':
-			idx=Day.index(i)
-			Day[idx]=i[1]
+		Day=Data.header['Date'].split("/")
+		for i in Day: 
+			if i[0]=='0':
+				idx=Day.index(i)
+				Day[idx]=i[1]
 
-	Time_UT=Data.header['FULLTIME'].split(":")
+		Time_UT=Data.header['FULLTIME'].split(":")
 
-	for i in Time_UT:
-		if i[0]=='0':
-			idx=Time_UT.index(i)
-			Time_UT[idx]=i[1]
+		for i in Time_UT:
+			if i[0]=='0':
+				idx=Time_UT.index(i)
+				Time_UT[idx]=i[1]
 	
-	Header_information['FWHM'] =Data.header['FWHM']
-	Header_information['Scale']=float(Data.header['SCALE'])
-	Header_information['Year']=int('20'+Day[2])
-	Header_information['Month']=int(Day[1])
-	Header_information['Day']=int(Day[0])
-	Header_information['Hour']=int(Time_UT[0])
+		Header_information['Year']=int('20'+Day[2])
+		Header_information['Month']=int(Day[1])
+		Header_information['Day']=int(Day[0])
+		Header_information['Hour']=int(Time_UT[0])
 			
-	exp_time=float(Data.header['EXPTIME'])
-	minute=int(Time_UT[1])
-	second=float(Time_UT[2])+exp_time/2
+		exp_time=float(Data.header['EXPTIME'])
+		minute=int(Time_UT[1])
+		second=float(Time_UT[2])+exp_time/2
 	
-	if second >= 60:
-		Header_information['Minute']=minute+1
-		Header_information['Second']=int(second-60)
-		Header_information['Microsecond']=abs(int(second)-second)*1000
-	else:
-		Header_information['Minute']=minute
-		Header_information['Second']=int(second)
-		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)	
+		if second >= 60:
+			Header_information['Minute']=minute+1
+			Header_information['Second']=int(second-60)
+			Header_information['Millisecond']=abs(int(second)-second)*1000
+			header.append(Header_information)
+		else:
+			Header_information['Minute']=minute
+			Header_information['Second']=int(second)
+			Header_information['Millisecond']=int(abs(int(second)-second)*10**6)	
+			header.append(Header_information)
+			
+		
 	
-	return Header_information
-	
-Header_information(DayDirectory,Base)
-
+	return header
 
 def WriteAstrometryOutput_Json(Base,DayDirectory,PipelineDirectory,config_file,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
 	
@@ -248,59 +256,57 @@ def WriteAstrometryOutput_Json(Base,DayDirectory,PipelineDirectory,config_file,X
 			lon=location_data['Longitude']*u.deg,
 			height=location_data['Height']*u.m)
 			
-	header=Header_information(DayDirectory,Base)
-
-	time = datetime.datetime(header['Year'],header['Month'],header['Day'],header['Hour'],header['Minute'],header['Second'],header['Microsecond'])
+	header=Header_information(DayDirectory)
+	for c in range(0,len(header)):
+		if header[c]['Image'] == str(Base[-2])+str(Base[-1]):
+			time = datetime.datetime(header[c]['Year'],header[c]['Month'],header[c]['Day'],header[c]['Hour'],header[c]['Minute'],header[c]['Second'],header[c]['Millisecond'])
 	
-	for i in range(len(Detections)):
-		
-			Match = found[i]
-			items={}
-			items['image']=str(Base[-2])+str(Base[-1])
-			items['FWHM'] =str(header['FWHM'])
-			items['Scale'] =str(header['Scale'])
-			items['Xdetect']=str(X[i])
-			items['Ydetect']= str(Y[i])
-			items['RaCalculated'] = str(Detections.ra[i].value)
-			items['DecCalculated'] = str( Detections.dec[i].value)
-		
-			if Match:
-				items['Match']= '1'
-				items['RaCatalogue'] = str(Catalogue.ra[i].value)
-				items['DecCatalogue'] = str(Catalogue.dec[i].value)
-				items['MagInst '] = str(DetectionsMags[i])
-				items['MagReal'] =str(CatalogueMags[i])
+			for i in range(len(Detections)):
+			
+					Match = found[i]
+					items={}
+					items['image']=str(Base[-2])+str(Base[-1])
+					items['Xdetect']=str(X[i])
+					items['Ydetect']= str(Y[i])
+					items['RaCalculated'] = str(Detections.ra[i].value)
+					items['DecCalculated'] = str( Detections.dec[i].value)
 				
-			if Match == False:
-				items['Match']= '0'
-				items['MagInst '] = str(DetectionsMags[i])
-				items['MagReal'] ='0'
-			
-
-			dec=(Detections.dec[i].value)*u.deg
-			ra=(Detections.ra[i].value)*u.deg
-			stars = SkyCoord(ra, dec, frame='icrs')
-			
-			#Converts Ra,Dec to Alt,Az
-			stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
-			sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
-			
-			items['Alt']=str(sky_coords[0])
-			items['Az']=str(sky_coords[1])
-
-			items_2_store.append(items)
-			
-			with open(f"{DayDirectory + '/OutputFiles/' + Base}.json", 'w') as f: 
-				json.dump(items_2_store, f, indent=3)
+					if Match:
+						items['Match']= '1'
+						items['RaCatalogue'] = str(Catalogue.ra[i].value)
+						items['DecCatalogue'] = str(Catalogue.dec[i].value)
+						items['MagInst '] = str(DetectionsMags[i])
+						items['MagReal'] =str(CatalogueMags[i])
+						
+					if Match == False:
+						items['Match']= '0'
+						items['MagInst '] = str(DetectionsMags[i])
+						items['MagReal'] ='0'
+					
+		
+					dec=(Detections.dec[i].value)*u.deg
+					ra=(Detections.ra[i].value)*u.deg
+					stars = SkyCoord(ra, dec, frame='icrs')
+					
+					#Converts Ra,Dec to Alt,Az
+					stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
+					sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
+					
+					items['Alt']=str(sky_coords[0])
+					items['Az']=str(sky_coords[1])
+		
+					items_2_store.append(items)
+					
+					with open(f"{DayDirectory + '/OutputFiles/' + Base}.json", 'w') as f: 
+						json.dump(items_2_store, f, indent=3)
 				
-
 #X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = SPADEFunctions.CatalogComparison(Base,PipelineDirectory,DayDirectory,config)
 #WriteAstrometryOutput_Json(Base,DayDirectory,PipelineDirectory,config_file,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
 
 #################################################################################################################################
 #        The purpose of the functions bellow is to find objects that are detected in more than  
 #        one image using criteria that are explained in the function's comments, and
-#        organize all detections in a list of dictionary lists.
+#        organize all detections in a list of dictionary lists. (OLHAR PARA ISTO!!!!!)
 #################################################################################################################################
 
 def criteria(pto, im_lst):
@@ -498,7 +504,7 @@ def ReadTLES(Links):
 	ReadTLES(Links) function uploads tle information from a url and saves it in a .json file (a list of dicts).
 	
 	INPUTS:
-	Links			->   A list of celestrak links
+	Links		->   Celestrak links of Satellites TLEs                               (lst)
 	
 	FILES CREATED:
 	GEO_tles.json
@@ -535,45 +541,30 @@ def ReadTLES(Links):
 			print('[+] TLE data downloaded in GEO_tles.json')
 	else:
 		print('[+] ERROR in downloading TLE data')
+
+def TLE_plot(Time,Alt,Az,time_ticks,nome):
+	
+	color_alt = "#FF0000"
+	color_az = "#00FF00"
+
+	fig, ax1 = plt.subplots()
+	ax2 = ax1.twinx()
+	
+	ax1.plot(Time, Alt,color=color_alt)
+	ax2.plot(Time, Az,color=color_az)
+	
+	ax1.set_xlabel("Time")
+	ax1.set_ylabel("Elevantion (degrees)",color=color_alt, marker='o',fontsize=14)
+	ax1.tick_params(axis="y", labelcolor=color_alt)
+	
+	ax2.set_ylabel("Azimuth (degrees)",color=color_az,marker='o', fontsize=14)
+	ax2.tick_params(axis="y", labelcolor=color_az)
+	
+	fig.suptitle(f"Satellite {nome}", fontsize=20)
+	plt.xticks(Time, time_ticks,rotation=0,fontsize=8)
+	plt.show()
 						
-#ReadTLES(Links)
-
-
-
-
-def AltAz_FOV(scale,pixel_num):
-	
-	FOV_degrees=(scale*pixel_num)/3600
-	Alt_target=+61.425 
-	Az_target=202.232 
-	
-	Alt=[]
-	Az=[]
-	
-	Alt_max=decdeg2dms((Alt_target+FOV_degrees/2))
-	altmax=f"{Alt_max[0]}deg {Alt_max[1]}'"+f' {Alt_max[2]}"'
-
-	Alt_min=decdeg2dms((Alt_target-FOV_degrees/2))
-	alt_min=f"{Alt_min[0]}deg {Alt_min[1]}'"+f' {Alt_min[2]}"'
-	Alt.append([alt_min,altmax])
-	
-	Az_max=decdeg2dms((Az_target+FOV_degrees/2))
-	azmax=f"{Az_max[0]}deg {Az_max[1]}'"+f' {Az_max[2]}"'
-
-	Az_min=decdeg2dms((Az_target-FOV_degrees/2))
-	azmin=f"{Az_min[0]}deg {Az_min[1]}'"+f' {Az_min[2]}"'
-	Az.append([azmin,azmax])
-	
-	return Alt,Az
-	
-	
-	
-#data=AltAz_FOV(4.72,2048)
-#print(data)
-
-
-def SatellitePosition():
-	
+def SatellitePosition(DayDirectory,PipelineDirectory,config_file):
 	'''
 	SatellitePosition() loads the satellites information from the TLEs saved in the .json file from the ReadTLES(Links) function, 
 	and calculates their position in a given time and location.
@@ -582,49 +573,104 @@ def SatellitePosition():
 	with open("GEO_tles.json", 'r') as stream:
 		lista_ficheiro=json.load(stream)
 	
-	ts = load.timescale() #The Timescale object returned by load.timescale() manages the conversions between different 
-						  #time scales and is also how the programmer builds Time objects for specific dates. 
-	#data=AltAz_FOV(4.72,2048)
+	header=Header_information(DayDirectory)	
+	Alt_target=header[0]['Alt']
+	Az_target=header[0]['Az']
+	scale=header[0]['Scale']
+	dimensions=header[0]['Dimensions']
 	
-	for i in lista_ficheiro:
+		
+	FOV=(scale*dimensions)/3600
+	Alt_window=[Alt_target-FOV/2,Alt_target+FOV/2]
+	Az_window=[Az_target-FOV/2,Az_target+FOV/2]
 
+	 #The Timescale object returned by load.timescale() manages the conversions between different 
+	 #time scales and is also how the programmer builds Time objects for specific dates. 
+	ts = load.timescale()
+						  
+	location=LatLonHei_information(PipelineDirectory,config_file)
+	satellites=[]
+	name=[]
+	for i in lista_ficheiro:
+		items={}
 		line1=i['tle_1']
 		line2=i['tle_2']
 		nome=i['satellite_name']
 	
 		satellite = EarthSatellite(line1, line2, nome, ts) # An Earth satellite loaded from a TLE file and propagated with SGP4. 
 
-		bluffton = wgs84.latlon(+40.182524, -7.873811) #coordinates of latitude and longitude of pampilhosa
+		bluffton = wgs84.latlon(location['Latitude'], location['Longitude'])
+		
+		difference = satellite - bluffton 
+		
+		t0 = ts.utc(2023, 2, 25, 23, 40, 0) #today's date, time when the first image was taken
+		# print(t0)
+		# print(t0.tdb)
+		1
+		t1 = ts.utc(2023, 2, 25, 23, 59, 0) #today's date, time when the last image was taken
+		Alt=[]
+		Az=[]
+		Time=[]
+		time_ticks=[]
 
-		t0 = ts.utc(2023, 2, 13, 23, 47, 53) #today's date, time when the first image was taken
-		t1 = ts.utc(2023, 2, 14, 23, 47, 53) #today's date, time when the last image was taken
-		
-		t, events = satellite.find_events(bluffton, t0, t1, altitude_degrees=30.0)
-
-		
-		# find_events(topos, t0, t1, altitude_degrees=0.0) - Searches between t0 and t1, which should each be a Skyfield Time 
-		# object, for passes of this satellite above the location topos that reach at least altitude_degrees above the horizon
-		
-		for ti, event in zip(t, events):
-			
-		#	print(ti,events)
-			
-			#name = ('rise above 30°', 'culminate', 'set below 30°')[event] #culminate-the moment when it is nearest to the Zenith
-			#print(f"Satellite {nome}: {ti.utc_strftime('%Y %b %d %H:%M:%S'),name}")
-			
+		for t in np.arange(t0,t1,0.001):
 			difference = satellite - bluffton 
-			topocentric = difference.at(ti)
+			topocentric = difference.at(t)
 			
 			alt, az, distance = topocentric.altaz()
-			#print(alt, az)
-			#print('Altitude:', alt)
-			#print('Azimuth:', az)
+			if alt.degrees > Alt_window[0] and alt.degrees< Alt_window[1]:
+				if az.degrees > Az_window[0] and az.degrees< Az_window[1]:
+					# Alt.append(alt.degrees)
+					# Az.append(az.degrees)
+					# Time.append(t.tdb)
+					# strig=f"{t.utc.hour}:{t.utc.minute}:{round(t.utc.second)}"
+					# time_ticks.append(strig)
+					name.append(nome)
+	
+					
+		if len(Alt)!= 0:
+			TLE_plot(Time,Alt,Az,time_ticks,nome)
+	print(len(name))
 
-			#ra, dec, distance = topocentric.radec()
-			#print(f"Right Ascention: {ra}")
-			#print(f"Declination: {dec}")
+				
 
-#b=SatellitePosition()
+
+
+		# t0 = ts.utc(2023, 2, 25, 23, 45, 0) #today's date, time when the first image was taken
+		# t1 = ts.utc(2023, 2, 25, 23, 55, 0) #today's date, time when the last image was taken
+		# t, events = satellite.find_events(bluffton, t0, t1,altitude_degrees==0.0)
+		
+		# #find_events(topos, t0, t1, altitude_degrees=0.0) - Searches between t0 and t1, which should each be a Skyfield Time 
+		# #object, for passes of this satellite above the location topos that reach at least altitude_degrees above the horizon
+	
+		# Alt=[]
+		# Az=[]
+		# time=[]
+		# time_ticks=[]
+		# for ti, event in zip(t, events):
+			
+			# difference = satellite - bluffton 
+			# topocentric = difference.at(ti)
+			
+			# alt, az, distance = topocentric.altaz()
+			# Alt.append(alt.degrees)
+			# Az.append(az.degrees)
+			# time.append(ti)
+			# time_ticks.append(f"{t1.utc.hour}':'{t1.utc.minute}':'{t1.utc.second}")
+
+		# if len(Alt)!=0:
+			 # TLE_plot(time,Alt,Az)
+			
+	
+		
+		
+
+
+			# if alt.degrees> Alt_window[0] and alt.degrees<Alt_window[1]:
+				# if az.degrees> Az_window[0] and az.degrees<Alt_window[1]:
+					# print("hello")
+
+SatellitePosition(DayDirectory,PipelineDirectory,config_file)
 
 
 
