@@ -13,6 +13,7 @@ import astropy.units as u
 import requests
 from skyfield.api import EarthSatellite
 from skyfield.api import load, wgs84,utc
+import excel2json
 
 
 ##################################################################################################################################
@@ -551,13 +552,10 @@ def find_correspondences(DayDirectory):
 	#scatteredplot_all_detections(correspondences)	
 	return correspondences
 
-
 #find_correspondences(DayDirectory)
 
-
-
 ################################################################################################################################
-#														TLES
+#														TLES   (ainda em construção)
 ################################################################################################################################
 
 def ReadTLES_json(Links):
@@ -698,31 +696,79 @@ def SatellitePosition(DayDirectory,PipelineDirectory,config_file):
 			alt, az, distance = topocentric.altaz()
 			#print(f"Satelite:{nome},Alt:{alt.degrees},Az{az.degrees}")
 			
-			# if alt.degrees > Alt_window[0] and alt.degrees< Alt_window[1]:
-				# if az.degrees > Az_window[0] and az.degrees< Az_window[1]:
-					# Alt.append(alt.degrees)
-					# Az.append(az.degrees)
-					# Time.append(t.tdb)
-					# strg=f"{t.utc.hour}:{t.utc.minute}:{round(t.utc.second)}"
-					# time_ticks.append(strg)
+			if alt.degrees > Alt_window[0] and alt.degrees< Alt_window[1]:
+				if az.degrees > Az_window[0] and az.degrees< Az_window[1]:
+					Alt.append(alt.degrees)
+					Az.append(az.degrees)
+					Time.append(t.tdb)
+					strg=f"{t.utc.hour}:{t.utc.minute}:{round(t.utc.second)}"
+					time_ticks.append(strg)
 
 					
 
 	
 					
-		# if len(Alt)!= 0:
-			# TLE_plot(Time,Alt,Az,time_ticks,nome)
+		if len(Alt)!= 0:
+			TLE_plot(Time,Alt,Az,time_ticks,nome)
+
+def convertxlsx_to_json():
+	xlsx_file='Oscar - Satellites 2023-03-02.xlsx'
+	excel2json.convert_from_file(xlsx_file)
+
+def ReadOscarJsonData():
+	
+	with open('Worksheet.json', 'r') as stream:
+		lista_ficheiro=json.load(stream)
+		
+	print(f" There are {len(lista_ficheiro)} satellites")
+	
+	inactive_sat=[]
+	for i in lista_ficheiro:
+		if i['Sat status'] == "Inactive":
+			inactive_sat.append(i["Acronym"])
+	print(f"{ len(inactive_sat)} of those are inactive")
+	print(inactive_sat)
+
+def SatellitePosition(PipelineDirectory,config_file):
+	'''
+	SatellitePosition() loads the satellites information from the TLEs saved in the .json file from the ReadTLES(Links) function, 
+	and calculates their position in a given time and location.
+	'''
+	
+	with open("GEO_tles.json", 'r') as stream:
+		lista_ficheiro=json.load(stream)
+		
+	ts = load.timescale()
+	
+	config_information = ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
+	
+	location=EarthLocation(
+			lat=float(config_information['Latitude'])*u.deg,
+			lon=float(config_information['Longitude'])*u.deg,
+			height=float(config_information['Height'])*u.m)
+			
+			
+	sat=[]
+
+	for i in lista_ficheiro:
+		items={}
+		line1=i['tle_1']
+		line2=i['tle_2']
+		nome=i['satellite_name']
+	
+		satellite = EarthSatellite(line1, line2, nome, ts) # An Earth satellite loaded from a TLE file and propagated with SGP4. 
+		sat.append(satellite)
+	step = 1
+	with open('data.txt', 'w') as f:
+		for chunk in [sat[n:n+step] for n in range(0, len(sat), step)]:
+			f.write(','.join(map(str, chunk)) + '\n')
+
+#SatellitePosition(PipelineDirectory,config_file)
 
 
-#SatellitePosition(DayDirectory,PipelineDirectory,config_file)
 
-
-
-
-
-
-
-
+	
+	
 
 
 
