@@ -21,14 +21,15 @@ import sys
 """
 The code is run by typing in terminal SPADE.py config_file
 Headers: FILTER, EXPTIME, TIME,RA,DEC,NAXIS1,NAXIS2
-
+Params: NUMBER,FLUX_ISOCOR,MAG_ISOCOR,MAGERR_ISOCOR,FLUX_APER(1),FLUXERR_APER(1),
+X_IMAGE, Y_IMAGE, FLAGS, FWHM_IMAGE,ELONGATION, FLUX_RADIUS, SNR_WIN, VIGNET, MAG_PSF,
 
 """
 
-def Analise(Base):
-	SPADEFunctions.ImageProcess(Base,PipelineDirectory,DayDirectory,Masters,config,logging)
+def Analise(File):
+	SPADEFunctions.ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging)
 
-TempoEntreImagens = 10
+TimeBetweenImages = 10
 PipelineDirectory = os.getcwd()
 # ~ day = date.today()
 day = "2022-03-20"
@@ -45,7 +46,8 @@ if not os.path.isdir(DayDirectory):
 	os.mkdir(diretoria + "/SextractorCatalogue")
 	os.mkdir(diretoria + "/AstrometryFiles")
 	os.mkdir(diretoria + "/OutputFiles")
-	
+
+
 config_file = sys.argv[1]
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
 config['LOGGER'] = int(config['LOGGER'])
@@ -78,16 +80,19 @@ A = time.time()
 while True:
 	# Enquanto n tem imagens
 	while len(os.listdir(path=DayDirectory + "/Images")) == 0:
-		print("ativos: " + str(len(threadpool._threads)))
+		print("actives: " + str(len(threadpool._threads)))
 		print("queue: " + str(threadpool._work_queue.qsize()))
 		if threadpool._work_queue.qsize() + len(threadpool._threads) == 0:	
-			print('Não existem mais dados deste dia')
-		time.sleep(TempoEntreImagens)
+			print('There is no more data for this day')
+		time.sleep(TimeBetweenImages)
 		
-		
-	for ficheiro in os.listdir(path=DayDirectory + "/Images"):				
-		Path(DayDirectory + '/Images/' + ficheiro).rename(DayDirectory + '/ProcessedImages/' + ficheiro)
-		Base = ficheiro.split('.')[0]
-		threadpool.submit(Analise,Base)
+	
+	Files = os.listdir(path=DayDirectory + "/Images")
+	Files.sort()
+	for File in Files:				
+		Path(f"{DayDirectory}/Images/{File}").rename(f"{DayDirectory}/ProcessedImages/{File}")
+		threadpool.submit(Analise,File)
+
+
 
 

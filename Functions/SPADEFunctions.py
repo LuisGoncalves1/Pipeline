@@ -967,12 +967,14 @@ def RemoveBorders(File,P):
 		A[-1].data = Dados[((Dados['Y_IMAGE']>P) & (Dados['Y_IMAGE']<2048-P)) & ((Dados['X_IMAGE']>P) & (Dados['X_IMAGE']<2048-P))]
 		A.close()
 	
-def WriteOutput(Base,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
+def WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
 	'''
 	Creates txt Output File with Information about detections:
 	X,Y,(Ra,Dec) calculated, (Ra,Dec) catalogue, Mag calculated, Mag catalogue
 	
 	'''
+	logging.debug("Started Writing Output of image " + File)
+	Base = File.split('.')[0]
 	with open(DayDirectory + '/OutputFiles/' + Base,'a') as ficheiro:
 		linha = f'{"X":20},{"Y":20},{"SNR":5},{"FWHM":10},{"Match":6},{"RaCalculated":20},{"DecCalculated":20},{"RaCatalogue":20},{"DecCatalogue":20},{"MagInst":19},{"MagReal":8}\n'
 		ficheiro.write(linha)
@@ -996,6 +998,8 @@ def WriteOutput(Base,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, Cat
 			
 			linha = f'{Xdetect:20},{Ydetect:20},{SNR[i]:5},{FWHM[i]:10},{Match:6},{RaCalculated:20},{DecCalculated:20},{RaCatalogue:20},{DecCatalogue:20},{MagInst:19},{MagReal:8}\n'
 			ficheiro.write(linha)
+	
+	logging.debug("Finished Writing Output of image " + File)
 
 def ReadOutput(OutputFile):
 	'''
@@ -1043,7 +1047,7 @@ def ReadTLES(Links,Files):
 
 # Specific Softwares
 
-def sextractor(Base,PipelineDirectory,DayDirectory,SexConfig,cattype,VIGNET=None,fit_psf=False):
+def sextractor(File,PipelineDirectory,DayDirectory,SexConfig,cattype,VIGNET=None,fit_psf=False):
 	''' 
 	Function to run sextractor on an image and output catalogue file
 	
@@ -1064,10 +1068,10 @@ def sextractor(Base,PipelineDirectory,DayDirectory,SexConfig,cattype,VIGNET=None
 	
 	
 	'''
-	
-	FileBase = DayDirectory + '/SextractorCatalogue/' + Base
-	SexFile = DayDirectory + '/ReducedImages/' + Base +  '.fits'
-	SexDir = PipelineDirectory + '/Files/Sextractor/' 				# The sextractor directory is inside the pipeline folder
+	Base = File.split('.')[0]
+	FileBase = f"{DayDirectory}/SextractorCatalogue/{Base}"
+	SexFile = f"{DayDirectory}/ReducedImages/{File}"
+	SexDir = f"{PipelineDirectory}/Files/Sextractor/" 				# The sextractor directory is inside the pipeline folder
 	
 	if fit_psf:
 		FileBase = FileBase + '_psf'
@@ -1195,7 +1199,6 @@ def psfex(catin,catout,file_config,VIGNET):
 	'''
 	cmd = ['psfex', catin, '-c', file_config,'-OUTCAT_NAME',catout, '-PSF_SIZE','{},{}'.format(VIGNET,VIGNET)] 
 	cmd_str = ' '.join(cmd) 						  # Compacts the cmd dictionary created so it can be run through terminal
-	
 	result = subprocess.run(cmd, capture_output=True) # Runs psfex with given parameters
 	status = result.returncode						  # Returns result, status = 0 if good and 255 if bad
 	return result, status
@@ -1371,12 +1374,12 @@ def CosmicRayCorrection(File,Data,logging):
 
 # Main Code	 				
 
-def ImageReduction(Base,PipelineDirectory,DayDirectory,Masters,config,logging):
+def ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	'''
 	Function that reduces each Image, correcting for Dark,Gain,Flat,Background,Crosstalk and CosmicRays according to the config file.
 	
 	INPUTS:
-	Base 				-> File name without path and ending 						(str)
+	File 				-> File name with path										(str)
 	PipelineDirectory 	-> Directory of Pipeline folder								(str)
 	DayDirectory 		-> Directory of present day									(str)
 	config				-> Configuration Dictionary									(dic)
@@ -1386,14 +1389,13 @@ def ImageReduction(Base,PipelineDirectory,DayDirectory,Masters,config,logging):
 	Image Header
 	
 	FILES CREATED (ReducedImages):
-	Base.fits 			-> Corrected image file										(fits)
+	File	 			-> Corrected image file										(fits)
 	'''
-	File = Base + '.fits'
-	logging.debug("Starting to analise " + File)											# Logger information
-	Data = CCDData.read(DayDirectory + "/ProcessedImages/" + File , unit = 'adu') 		# Reads Image
+	logging.info("Starting Reduction on image " + File)										# Logger information
+	Data = CCDData.read(f"{DayDirectory}/ProcessedImages/{File}" , unit = 'adu') 			# Reads Image
 	Filter = Data.header['FILTER']															# Gets filter from header
 	
-	# ~ exposure = float(Data.header['EXPTIME'].replace(',','.'))								# Bruno
+	# ~ exposure = float(Data.header['EXPTIME'].replace(',','.'))							# Bruno
 	exposure = float(Data.header['EXPTIME'])												# Defesa
 	
 	if config["DARK"]:																		# If DARK is True does dark correction
@@ -1434,11 +1436,12 @@ def ImageReduction(Base,PipelineDirectory,DayDirectory,Masters,config,logging):
 		Data.header['CR'] = 'False'															# Writes in header
 		logging.debug("Skipped CosmicRay correction of file " + File)
 	
-	DirImage = DayDirectory  + '/ReducedImages/' + File	
+	DirImage = f"{DayDirectory}/ReducedImages/{File}"	
 	Data.write(DirImage, overwrite = True)
+	logging.info("Finished Reduction of image " + File)
 	return Data.header
 
-def SextractorPart(Base,PipelineDirectory,DayDirectory,config):
+def SextractorPart(File,PipelineDirectory,DayDirectory,config):
 	'''
 	Function that processes all sextractor Steps. 
 	Firstly it runs sextractor twice, in order to produce a FITS_LDAC (for psfex) and a FITS_1.0 (for astrometry.net). Detections too close to the borders are removed.
@@ -1461,15 +1464,17 @@ def SextractorPart(Base,PipelineDirectory,DayDirectory,config):
 	Base_out.cat		-> Ouput file with PSFEX									(txt)
 	Base_psfLDAC.cat	-> Sextractor catalog obtained using PSF model				(Final File)
 	'''
-	FileBase = DayDirectory + '/SextractorCatalogue/' + Base
+	Base = File.split('.')[0]
+	FileBase = f"{DayDirectory}/SextractorCatalogue/{Base}"
 	VIGNET = int(config['VIGNET'])
+	logging.info("Started Sextractor Pass of image " + File)
 	
 	# First Sextractor pass: creates 2 catalogs: one in Fits_1.0 format for use in astrometry.net and 1 in Fits_LDAC for use in PSFEX, then sources too close to the
 	# border are elliminated. The threshold for the distance is the VIGNET parameter given in the configuration file
-	result = sextractor(Base,PipelineDirectory,DayDirectory,config['SexConfig'],'FITS_LDAC',VIGNET = VIGNET)
+	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],'FITS_LDAC',VIGNET = VIGNET)
 	if config['VERBOSE']:
 		print(result)
-	result = sextractor(Base,PipelineDirectory,DayDirectory,config['SexConfig'],'FITS_1.0')
+	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],'FITS_1.0')
 	if config['VERBOSE']:
 		print(result)
 	RemoveBorders(FileBase +'LDAC.cat',int(config['VIGNET']))
@@ -1477,9 +1482,9 @@ def SextractorPart(Base,PipelineDirectory,DayDirectory,config):
 	
 	
 	#Secondly, PSFEX is run with the sextractor catalog written before.
-	CatIn 	= FileBase +'LDAC.cat'
-	CatOut 	= FileBase + '_out.cat'
-	ConfigFile =  PipelineDirectory + '/Files/Sextractor/' + config['PSFexConfig']
+	CatIn 	= f"{FileBase}LDAC.cat"
+	CatOut 	= f"{FileBase}_out.cat"
+	ConfigFile =  f"{PipelineDirectory}/Files/Sextractor/{config['PSFexConfig']}"
 	Rem0FWHM(CatIn)
 	result, status = psfex(CatIn,CatOut,ConfigFile,VIGNET)
 	
@@ -1489,9 +1494,10 @@ def SextractorPart(Base,PipelineDirectory,DayDirectory,config):
 	
 	
 	#Lastly, Sextractor is run again with the PSF model, in order to improve photometry
+	logging.info("Finished Sextractor Pass of " + File)
 	resultado = sextractor(Base,PipelineDirectory,DayDirectory,config['SexConfig'],'FITS_LDAC',VIGNET = VIGNET,fit_psf = True)
 
-def AstrometryPart(Base,PipelineDirectory,DayDirectory,config,header):
+def AstrometryPart(File,PipelineDirectory,DayDirectory,config,header):
 	'''
 	Function that runs astrometry and compares image detections with catalogue positions.
 	Firstly it runs astrometry with sextractor catalogue created previously. Then, it transforms the detections XY coordinates to Ra/Dec system. 
@@ -1513,16 +1519,18 @@ def AstrometryPart(Base,PipelineDirectory,DayDirectory,config,header):
 	Base-indx.xyls		-> XY coordinates of stars used for plate-solving			(Psf file)
 	Base				-> Ra/Dec coordinates of detections							(Final File)
 	'''
-	
+	logging.info("Started Astrometry Pass of image " + File)
+	Base = File.split('.')[0]
 	result,status = astrometry(DayDirectory + '/SextractorCatalogue/' + Base + '.cat',header,DayDirectory + '/AstrometryFiles',config) 
 
 	# ~ #Transforms from XY to RaDec with WCS information from astrometry
-	FileWc = DayDirectory + '/AstrometryFiles/' + Base + '.wcs'															# Gets directory : WCS file created from astrometry 
-	FileXY = DayDirectory + '/SextractorCatalogue/' + Base + '.cat'														# Gets directory : catalogue created from sextractor
-	FileOutput = DayDirectory + '/AstrometryFiles/' + Base																# Output file for calculation of RaDec coordinate of all stars
+	FileWc = f"{DayDirectory}/AstrometryFiles/{Base}.wcs"															# Gets directory : WCS file created from astrometry 
+	FileXY = f"{DayDirectory}/SextractorCatalogue/{Base}.cat"														# Gets directory : catalogue created from sextractor
+	FileOutput = f"{DayDirectory}/AstrometryFiles/{Base}"																# Output file for calculation of RaDec coordinate of all stars
 	result, status	= XYToRaDec(FileWc,FileXY,FileOutput)																# Calculates RaDec positions for all stars obtained from sextractor
+	logging.info("Finished Astrometry Pass of image " + File)
 
-def CatalogComparison(Base,PipelineDirectory,DayDirectory,config):
+def CatalogComparison(File,PipelineDirectory,DayDirectory,config,Filter):
 	'''
 	Function that compares image detections with the catalog.
 	
@@ -1542,10 +1550,11 @@ def CatalogComparison(Base,PipelineDirectory,DayDirectory,config):
 	FILES CREATED (SextractorCatalogue):
 	NONE
 	'''
-	
-	FileOutput = DayDirectory + '/AstrometryFiles/' + Base																# Output file for calculation of RaDec coordinate of all stars
-	FileXY = DayDirectory + '/SextractorCatalogue/' + Base + '.cat'														# Gets directory : catalogue created from sextractor
-	FileWc = DayDirectory + '/AstrometryFiles/' + Base + '.wcs'															# Gets directory : WCS file created from astrometry
+	logging.info("Started Catalogue Comparison of image " + File)
+	Base = File.split('.')[0]
+	FileOutput = f"{DayDirectory}/AstrometryFiles/{Base}"																# Output file for calculation of RaDec coordinate of all stars
+	FileXY = f"{DayDirectory}/SextractorCatalogue/{Base}.cat"														# Gets directory : catalogue created from sextractor
+	FileWc = f"{DayDirectory}/AstrometryFiles/{Base}.wcs"															# Gets directory : WCS file created from astrometry
 	
 	
 	#Gets the information from the sextractor file and the calculated positions
@@ -1564,223 +1573,27 @@ def CatalogComparison(Base,PipelineDirectory,DayDirectory,config):
 	Catalogue,CatalogueMags = ReadCatalogue[config['Catalog']](ZonesUCAC(min(Dec),max(Dec)),catalog_path,float(config['MagLim']))
 	idx,found = find_matching_stars(Detections, Catalogue, max_sep=max_sep * u.deg) 						# Starts matching between these stars and catalogue stars
 	
-	CatalogueMags = np.array(CatalogueMags['G'])[idx]
+	if Filter == 'none':
+		Filter = 'G'
+	CatalogueMags = np.array(CatalogueMags[Filter])[idx]
 	Catalogue = Catalogue[idx]
+	logging.info("Finished Catalogue Comparison of image " + File)
 	return X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM
 	
 def AnalyseDebris():
 	#Algo
 	x = 1+1
 			
-def ImageProcess(Base,PipelineDirectory,DayDirectory,Masters,config,logging):
-	header = ImageReduction(Base,PipelineDirectory,DayDirectory,Masters,config,logging)
-	SextractorPart(Base,PipelineDirectory,DayDirectory,config)
-	AstrometryPart(Base,PipelineDirectory,DayDirectory,config,header)
-	X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = CatalogComparison(Base,PipelineDirectory,DayDirectory,config)
-	WriteOutput(Base,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
-		
-def AnalisarImagem(ficheiro,Masters,logging,config,diretoria,directory,catalogo,mag):
-	''' Main function to analise an image. 
-	Image reduction -> Sextractor twice -> PSFEX? -> Astrometry -> Comparison with catalog -> End
-	ficheiro -> Directory of image to analise									(str)
-	Masters -> Dictionary of available masters									(dict)
-	logging -> Logger															(log)
-	config -> Telescope config dictionary										(str)
-	diretoria -> Images directory for that day									(str)
-	directory -> Pipeline directory												(str)
-	catalogo -> Catalogue to be used for astrometry in SkyCoord type			(numpy.list)
-	mag -> Corrrespoinding magnitudes for catalogo positions					(numpy.list)
-	
-	Needs in header:
-	EXPTIME/EXPOSURE
-	FILTER
-	ǴAIN
+def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging):
+	header = ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging)
+	SextractorPart(File,PipelineDirectory,DayDirectory,config)
+	AstrometryPart(File,PipelineDirectory,DayDirectory,config,header)
+	X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = CatalogComparison(File,PipelineDirectory,DayDirectory,config,header['FILTER'])
+	WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
 	
 	
-	
-	Writes in header: DARK (True or False); 
-	FLAT (True or False);
-	BG (True or False);
-	CT (True of False);
-	CR (True or False);
-	
-	
-	'''
-	
-	
-	logging.debug("Starting to analise " + ficheiro)										# Logger information
-	Data = CCDData.read(diretoria + "/ImagensTratadas/" + ficheiro, unit = 'adu') 			# Reads Image
-	raw = Data.data.copy()																	# Copys data so it conserves initial image
-	Filter = Data.header['FILTER']															# Gets filter from header
-	# ~ exposure = float(Data.header['EXPTIME'].replace(',','.'))								# Bruno
-	exposure = float(Data.header['EXPTIME'])												# Defesa
-	
-	A = time.time()
-	if config["DARK"]:																		# If DARK is True does dark correction
-		logging.debug("Starting Dark correction of file " + ficheiro)						# Logger information
-		Master = BestDark(diretoria + '/Masters',exposure)									# Sees what is the best masterdark to apply
-		if Master == []:
-			logging.warning('There are no Darks available of type ' + Filter)				# IF there is none, it skips over dark correction
-			Data.header['DARK'] = 'False'													# Writes in header
-		else:
-			Master = diretoria + '/Masters/' + Master										# Gets master directory
-			MasterDark = CCDData.read(Master) 												# Reads and then applies master
-			Data = ccdproc.ccd_process(Data, dark_frame=MasterDark,dark_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) * u.s,data_exposure = float(Data.header["EXPOSURE"].replace(',','.')) *u.s)
-			Data.header['DARK'] = 'True'													# Writes in header
-			logging.debug("Finished Dark correction of file " + ficheiro)					# Logger information
-	else:	
-		Data.header['DARK'] = 'False'														# Writes in header
-		logging.debug("Skipped Dark correction of file " + ficheiro)
-		
-	if config['GAIN']:
-		# ~ Data = ccdproc.gain_correct(Data, float(Data.header['GAIN']))#*u.electron/u.adu
-		Data.data = Data.data/float(Data.header['GAIN'])
-		Data.header['GAIN'] = '1'
-		logging.debug("Finished Gain correction of file " + ficheiro)
-		
-	A = time.time() - A
-	
-	B = time.time()
-	if config["FLAT"]:
-		logging.debug("Starting Fits correction of file " + ficheiro)						# Logger information
-		if Filter not in Masters['Flat']:
-			logging.warning('There are no Flats available of type ' + Filter)				# Logger information if there is no flat
-			Data.header['FLAT'] = 'False'													# Writes in header
-		else:
-			Master = diretoria + '/Masters/MasterFlat' + Filter + '.fits'					# Gets master directory
-			MasterFlat = CCDData.read(Master)												# Reads master
-			Data = ccdproc.ccd_process(Data, master_flat = MasterFlat)						# Applies Master
-			Data.header['FLAT'] = 'True'													# Writes in header
-			logging.debug("Finished Fits correction of file " + ficheiro)					# Logger information
-	else:
-		Data.header['FLAT'] = 'False'														# Writes in header
-		logging.debug("Skipped Flat correction of file " + ficheiro)
-	
-	B = time.time()-B 													
-				
-	C = time.time()
-	if config["Background"]:
-		logging.debug("Eliminating Background of " + ficheiro)								# Logger information
-		bkg = MeanBackground(SigmaClip(sigma=3.))
-		bkg_value = bkg.calc_background(Data)												# Calculates background form image
-		Data = Data.subtract(bkg_value*np.ones(np.shape(Data))*u.adu,propagate_uncertainties=True,handle_meta='first_found') # Removes background from image
-		logging.debug("Background removed from " + ficheiro)								# Logger information
-		Data.header['BG'] = 'True'															# Writes in header
-	else:
-		Data.header['BG'] = 'False'															# Writes in header
-	
-	C = time.time() - C											
-	
-	D = time.time()					
-	if config["CrossTalk"]:																	# Stars crostalk correction if enabled
-		logging.debug("Starting CrossTalk correction of " + ficheiro)						# Logger information
-		alfa1 = float(config['alfa1'])																# Parameters for correction
-		alfa2 = float(config['alfa2'])
-		convolution_kernel = np.array([[0, alfa1, 0], 										# Deconvolution kernel for cross-talk correction
-									   [alfa1, 1-4*alfa1, alfa1], 
-									   [0, alfa1, 0]])
-		Data.data = cv2.filter2D(np.array(Data.data), -1, convolution_kernel)				# Applies kernel to image
-		logging.debug("Crosstalk corrected from " + ficheiro)
-		Data.header['CT'] = 'True'															# Writes in header
-	else:
-		Data.header['CT'] = 'False'															# Writes in header
-	D = time.time()-D
-	
-	E = time.time()
-	if config["CosmicRays"]:
-		logging.debug("Starting CosmicRays Correction of " + ficheiro)						# Logger information
-		crmask, Data.data = astroscrappy.detect_cosmics(Data.data, inmask = None, sepmed = False, cleantype='medmask', fsmode = 'median', verbose=False)  #deteta os raios cósmicos numa matriz numpy
-		logging.debug("CosmicRays removed from " + ficheiro)								# Logger information
-		Data.header['CR'] = 'True'															# Writes in header
-	else:
-		Data.header['CR'] = 'False'															# Writes in header
-	E = time.time() - E
-	
-	DirImage = diretoria  + '/ImagensReduzidas/' + ficheiro	
-	Data.write(DirImage, overwrite = True)
-
-	if config["Astrometry"]:
-		#Runs sextractor on reduced image and produces sextractor catalogue
-		logging.debug("Starting Sextractor on " + ficheiro)
-		SexTime = time.time()
-		SexFile = diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'LDAC.cat'
-		resultado = sextractor(DirImage,directory,config['SexConfig'],SexFile,'FITS_LDAC',int(config['VIGNET']))  
-		SexFile = diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'.cat'
-		resultado = sextractor(DirImage,directory,config['SexConfig'],SexFile,'FITS_1.0')  
-		RemoveBorders(diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'LDAC.cat',2,int(config['VIGNET']))
-		RemoveBorders(diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'.cat',1,int(config['VIGNET']))	
-		SexTime = time.time() - SexTime
-		logging.debug("Finished Sextractor on " + ficheiro)
-
-		
-		
-		# ~ #Runs astrometry with sextractor catalogue and outputs in astrometry folder (corr,wcs,xyls) files
-		logging.debug("Starting Astrometry on " + ficheiro)
-		AstTime = time.time()
-		result,status = astrometry(diretoria + '/SextractorCatalogue/' + ficheiro[:-5] + '.cat',Data.header,diretoria + '/AstrometryFiles',config) 
-		AstTime = time.time() - AstTime
-		logging.debug("Finished Astrometry on " + ficheiro)
-		
-		# ~ #Transforms from XY to RaDec with WCS information from astrometry
-		nomeficheiro = ficheiro.split('/')[-1].split('.')[0]														# Saves name of file (removes rest of extension)
-		FileWc = diretoria + '/AstrometryFiles/' + nomeficheiro + '.wcs'											# Gets directory : WCS file created from astrometry 
-		FileXY = diretoria + '/SextractorCatalogue/' + nomeficheiro + '.cat'										# Gets directory : catalogue created from sextractor
-		FileOutput = diretoria + '/AstrometryFiles/' + nomeficheiro													# Output file for calculation of RaDec coordinate of all stars
-		TransfTime = time.time()
-		result, status	= XYToRaDec(FileWc,FileXY,FileOutput)														# Calculates RaDec positions for all stars obtained from sextractor
-		TransfTime = time.time() - TransfTime
-
-		#Gets the information from the sextractor file and the calculated positions
-		Posicoes = fits.open(FileOutput)												# Gets positions calculated
-		Ra,Dec = Posicoes[1].data['RA'],Posicoes[1].data['DEC']
-		SexFile = diretoria + '/SextractorCatalogue/'+ ficheiro[:-5] +'.cat'							# Saves RaDec positions
-		SexData = ReadSextractorFileFit(SexFile)			# Reads sextractor file obtained in the beggining and saves desired values
-		X,Y,Mags,MagsErro,BackG,fluxo,FWHM= SexData['X_IMAGE'], SexData['Y_IMAGE'], SexData['MAG_ISOCOR'],SexData['MAGERR_ISOCOR'],SexData['BACKGROUND'],SexData['FLUX_ISOCOR'],SexData['FWHM_IMAGE']
-		
-		#Matches the objects found and the catalogue
-		stars = SkyCoord(ra = Longitude(Ra, unit = u.deg), dec = np.array(Dec)*u.deg, frame = 'cirs')  				# Creates SkyCoord object with RaDec positions obtained (needed for matching)
-		MatchTime = time.time()
-		WCS = fits.open(FileWc)
-		scale = float(WCS[0].header['COMMENT'][-8].split()[1])
-		
-		max_sep = float(config['max_sep'])*np.median(FWHM)*scale/3600
-		idx,found = find_matching_stars(stars, catalogo, max_sep=max_sep * u.deg) 						# Starts matching between these stars and catalogue stars
-		MatchTime = time.time() - MatchTime
-		EncontradosX = X[found]
-		logging.debug("found " + len(EncontradosX) + " catalog objects in image " + ficheiro)
-		
 
 
-
-	if config['GRAPH']:
-		fig,axes = plt.subplots(2,2)
-		ax = axes.ravel()
-		vmin,vmax = None,None
-		ax[0].set_title('Imagem Inicial')
-		ax[0].imshow(raw,cmap='gray',vmin=vmin or np.nanpercentile(raw, 0.1),vmax=vmax or np.nanpercentile(raw, 99))
-		ax[1].set_title('Imagem Final')
-		ax[1].imshow(Data.data,cmap='gray',vmin=vmin or np.nanpercentile(Data.data, 0.1),vmax=vmax or np.nanpercentile(Data.data, 99))
-		ax[2].set_title('Sextractor Detections')
-		ax[2].imshow(Data.data,cmap='gray',vmin=vmin or np.nanpercentile(Data.data, 0.1),vmax=vmax or np.nanpercentile(Data.data, 99))
-		
-		ax[3].set_title('Sextractor')
-		ax[3].imshow(Data.data,cmap='gray',vmin=vmin or np.nanpercentile(Data.data, 0.1),vmax=vmax or np.nanpercentile(Data.data, 99))
-		plt.show() 
-	
-	logging.info("Tempos de :" + ficheiro)
-	logging.info('TempoDark: {:.2f}'.format(A))
-	logging.info('TempoFlat: {:.2f}'.format(B))
-	logging.info('TempoBackGround: {:.2f}'.format(C))
-	logging.info('TempoCrossTalk: {:.2f}'.format(D))
-	logging.info('TempoCosmicRays: {:.2f}'.format(E))
-	logging.info('TempoSextractor: {:.2f}'.format(SexTime))
-	logging.info('TempoAstrometry: {:.2f}'.format(AstTime))
-	logging.info('TempoTransformar: {:.2f}'.format(TransfTime))
-	logging.info('TempoMatch: {:.2f}'.format(MatchTime))
-	
-	print(status)
-	print(ficheiro)
-	return 
 
 ##################################################################################################################################################################
 
@@ -1806,8 +1619,8 @@ def files(DayDirectory):
 	'''
 	
 	all_files=[]
-	for ficheiro in os.listdir(path=DayDirectory + '/ProcessedImages/'):				
-		ficheiro=ficheiro[:-5]
+	for ficheiro in os.listdir(path=DayDirectory + '/ProcessedImages/'):
+		ficheiro = ficheiro.split('.')[0]				
 		all_files.append(ficheiro)
 		
 	all_files.sort()
