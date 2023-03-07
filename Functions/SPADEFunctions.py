@@ -17,7 +17,7 @@ import subprocess
 import itertools
 from astropy.io import fits
 from astropy.table import Table
-from astropy.coordinates import SkyCoord, Longitude,  Angle, match_coordinates_sky
+from astropy.coordinates import SkyCoord, Longitude,  Angle, match_coordinates_sky, AltAz, EarthLocation
 import struct
 import requests
 
@@ -973,7 +973,7 @@ def WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, Cat
 	X,Y,(Ra,Dec) calculated, (Ra,Dec) catalogue, Mag calculated, Mag catalogue
 	
 	'''
-	logging.debug("Started Writing Output of image " + File)
+	logging.info("Started Writing Output of image " + File)
 	Base = File.split('.')[0]
 	with open(DayDirectory + '/OutputFiles/' + Base,'a') as ficheiro:
 		linha = f'{"X":20},{"Y":20},{"SNR":5},{"FWHM":10},{"Match":6},{"RaCalculated":20},{"DecCalculated":20},{"RaCatalogue":20},{"DecCatalogue":20},{"MagInst":19},{"MagReal":8}\n'
@@ -999,7 +999,7 @@ def WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, Cat
 			linha = f'{Xdetect:20},{Ydetect:20},{SNR[i]:5},{FWHM[i]:10},{Match:6},{RaCalculated:20},{DecCalculated:20},{RaCatalogue:20},{DecCatalogue:20},{MagInst:19},{MagReal:8}\n'
 			ficheiro.write(linha)
 	
-	logging.debug("Finished Writing Output of image " + File)
+	logging.info("Finished Writing Output of image " + File)
 
 def ReadOutput(OutputFile):
 	'''
@@ -1370,6 +1370,192 @@ def CosmicRayCorrection(File,Data,logging):
 	return Data
 
 
+
+
+################################################################################################################################
+
+def files(DayDirectory):
+	'''
+	Function created to store a list of the Bases of all the analysed images
+	
+	INPUTS:
+	DayDirectory 		-> directory of the present day									(str)
+	
+	RETURNS:
+	all_files     		-> sortted list of all analysed files					        (lst)
+	
+	FILES CREATED:
+	None
+	'''
+	
+	all_files=[]
+	for ficheiro in os.listdir(path=DayDirectory + '/ProcessedImages/'):
+		if ficheiro[0]=='P':
+			ficheiro=ficheiro[:-5]
+			all_files.append(ficheiro)
+		
+	all_files.sort()
+		
+	return all_files
+
+			
+def ReadFilesHeader(header,File):
+	
+	'''
+	Function created to return a list of dicts with the header information (time,date,scale,mean fwhm,dimensions) of all processed 
+	files. The size of the list is associated with the number os processed files
+	
+	INPUTS:
+	DayDirectory	->   directory of the present day									(str)
+	
+	RETURNS:
+	header	->   header information of all processed images                  		(list of dicts)
+	
+	FILES CREATED:
+	None
+	'''
+	
+	data=[]
+		
+	Header_information={}
+
+	Header_information['Image'] =File[-2]+File[-1] #Stores the last two strings of file name, that is associated to the image number, so you know to which image the header information is associated to.
+	Header_information['FWHM'] =header['FWHM']
+	Header_information['Dimensions'] =header['NAXIS1']
+	Header_information['Scale']=float(header['SCALE'])
+	Header_information['Alt']=float(header['ALTUR'])
+	Header_information['Az']=float(header['AZIMUTH'])
+	
+	#In current file headers, date and time information is stored in the format: 21/04/23 and 13:09:12.2 (an example)
+	#The code bellow splits the caracters from : and / and returns the strings that begin with 0 with only the second 
+	#element (04 --> 4, 09 --> 9).This is helpful when using datetime module in further analysis, that can't interpret 
+	#month 04 or hour 09. It also adds the string 20 to the caracter asscociated to the year for the same reason (23 --> 2023).
+		
+	Day=header['Date'].split("/") 
+	for i in Day: 
+		if i[0]=='0':
+			idx=Day.index(i)
+			Day[idx]=i[1]
+
+	Time_UT=header['FULLTIME'].split(":")
+
+	for i in Time_UT:
+		if i[0]=='0':
+			idx=Time_UT.index(i)
+			Time_UT[idx]=i[1]
+	
+	Header_information['Year']=int('20'+Day[2])
+	Header_information['Month']=int(Day[1])
+	Header_information['Day']=int(Day[0])
+	Header_information['Hour']=int(Time_UT[0])
+		
+		
+	# This part of the algoritm adds half of the exposure time to the time when the image was taken.
+	exp_time=float(header['EXPTIME'])
+	minute=int(Time_UT[1])
+	second=float(Time_UT[2])+exp_time/2
+		
+	if second >= 60:
+		Header_information['Minute']=minute+1
+		Header_information['Second']=int(second-60) 
+		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
+		data.append(Header_information)
+	else:
+		Header_information['Minute']=minute
+		Header_information['Second']=int(second)
+		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
+		data.append(Header_information)
+
+	return data
+	
+def WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
+	 
+	'''
+	Function that creates a json file with the information about detections from Astrometry:
+	X,Y,(Ra,Dec) calculated, (Ra,Dec) catalogue, Mag calculated, Mag catalogue, Altitude and Azimuthe. 
+	
+	INPUTS:
+	File 				-> File name without path and ending 						(str)
+	DayDirectory 		-> Directory of present day									(str)
+	config				-> Configuration Dictionary									(dic)
+	Detections			-> SkyCoord Object with image detections (Ra/Dec)			(SkyCoord)
+	DetectionsMags		-> Instrumental magnitudes corresponding to Detections		(np.array)
+	Catalogue			-> SkyCoord Object with catalogue matches (Ra/Dec)			(SkyCoord)
+	CatalogueMags		-> G magnitudes corresponding to Detections					(np.array)
+	found				-> Boolean array with matches								(np.array)
+	
+	OUTPUTS:
+	NONE
+	
+	FILES CREATED:
+	{File}.json --> the number of files created is related to the number of files
+	
+	'''
+	logging.info("Started Writing Output of image " + File)
+
+	items_2_store=[]
+	
+	logging.info("hello1")
+	#The location where the images were taken is necessary to convert RA,DEC coordinates to Alt,Az coordinates
+	location=EarthLocation(
+			lat=float(config['Latitude'])*u.deg,
+			lon=float(config['Longitude'])*u.deg,
+			height=float(config['Height'])*u.m)
+	
+	#Header Information of proessed files
+	
+	logging.info("hello2")
+	
+	
+	header_data=ReadFilesHeader(header,File)
+	logging.info("hello3")
+	print(header_data)
+
+	#The algoritm only continues when the image of which the header information is associated to is the same as the image of current Base
+	
+	time = datetime.datetime(header_data[0]['Year'],header_data[0]['Month'],header_data[0]['Day'],header_data[0]['Hour'],header_data[0]['Minute'],header_data[0]['Second'],header_data[0]['Microsecond'])
+	logging.info("hello4")
+	for i in range(len(Detections)):
+			
+			Match = found[i]
+			items={}
+			items['image']=str(File[-2])+str(File[-1])
+			items['Xdetect']=str(X[i])
+			items['Ydetect']= str(Y[i])
+			items['RaCalculated'] = str(Detections.ra[i].value)
+			items['DecCalculated'] = str( Detections.dec[i].value)
+		
+			if Match:
+				items['Match']= '1'
+				items['RaCatalogue'] = str(Catalogue.ra[i].value)
+				items['DecCatalogue'] = str(Catalogue.dec[i].value)
+				items['MagInst '] = str(DetectionsMags[i])
+				items['MagReal'] =str(CatalogueMags[i])
+				
+			if Match == False:
+				items['Match']= '0'
+				items['MagInst '] = str(DetectionsMags[i])
+				items['MagReal'] ='0'
+			
+
+			dec=(Detections.dec[i].value)*u.deg
+			ra=(Detections.ra[i].value)*u.deg
+			stars = SkyCoord(ra, dec, frame='icrs')
+			
+			#Converts Ra,Dec to Alt,Az
+			stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
+			sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
+			
+			items['Alt']=str(sky_coords[0])
+			items['Az']=str(sky_coords[1])
+
+			items_2_store.append(items)
+			
+			with open(f"{DayDirectory + '/OutputFiles/' + File}.json", 'w') as f: 
+				json.dump(items_2_store, f, indent=3)
+						
+	logging.info("Finished Writing Output of image " + File)
+
 ##################################################################################################################################################################
 
 # Main Code	 				
@@ -1589,7 +1775,8 @@ def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	SextractorPart(File,PipelineDirectory,DayDirectory,config)
 	AstrometryPart(File,PipelineDirectory,DayDirectory,config,header)
 	X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = CatalogComparison(File,PipelineDirectory,DayDirectory,config,header['FILTER'])
-	WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
+	#WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
+	WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
 	
 	
 
@@ -1604,28 +1791,6 @@ def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 # 								 		OUTPUT FILES, HEADER INFORMATION
 ##################################################################################################################################
 
-def files(DayDirectory):
-	'''
-	Function created to store a list of the Bases of all the analysed images
-	
-	INPUTS:
-	DayDirectory 		-> directory of the present day									(str)
-	
-	RETURNS:
-	all_files     		-> sortted list of all analysed files					        (lst)
-	
-	FILES CREATED:
-	None
-	'''
-	
-	all_files=[]
-	for ficheiro in os.listdir(path=DayDirectory + '/ProcessedImages/'):
-		ficheiro = ficheiro.split('.')[0]				
-		all_files.append(ficheiro)
-		
-	all_files.sort()
-		
-	return all_files
 
 def WriteSextractorFile_Json(DayDirectory):
 	'''
@@ -1671,162 +1836,7 @@ def WriteSextractorFile_Json(DayDirectory):
 	
 	with open('SExtractorOutput.json', 'w') as f:
 		json.dump(lst_jsonfile, f, indent=3)
-			
-def ReadFilesHeader(DayDirectory):
-	
-	'''
-	Function created to return a list of dicts with the header information (time,date,scale,mean fwhm,dimensions) of all processed 
-	files. The size of the list is associated with the number os processed files
-	
-	INPUTS:
-	DayDirectory	->   directory of the present day									(str)
-	
-	RETURNS:
-	header	->   header information of all processed images                  		(list of dicts)
-	
-	FILES CREATED:
-	None
-	'''
-	
-	header=[]
-	all_files=files(DayDirectory)
-
-	for ficheiro in all_files:
-		
-		Header_information={}
-		Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + ficheiro}.fits", unit = 'adu') 
-		
-		Header_information['Image'] =ficheiro[-2]+ficheiro[-1] #Stores the last two strings of file name, that is associated to the image number, so you know to which image the header information is associated to.
-		Header_information['FWHM'] =Data.header['FWHM']
-		Header_information['Dimensions'] =Data.header['NAXIS1']
-		Header_information['Scale']=float(Data.header['SCALE'])
-		Header_information['Alt']=float(Data.header['ALTUR'])
-		Header_information['Az']=float(Data.header['AZIMUTH'])
-		
-		#In current file headers, date and time information is stored in the format: 21/04/23 and 13:09:12.2 (an example)
-		#The code bellow splits the caracters from : and / and returns the strings that begin with 0 with only the second 
-		#element (04 --> 4, 09 --> 9).This is helpful when using datetime module in further analysis, that can't interpret 
-		#month 04 or hour 09. It also adds the string 20 to the caracter asscociated to the year for the same reason (23 --> 2023).
-		
-		Day=Data.header['Date'].split("/") 
-		for i in Day: 
-			if i[0]=='0':
-				idx=Day.index(i)
-				Day[idx]=i[1]
-
-		Time_UT=Data.header['FULLTIME'].split(":")
-
-		for i in Time_UT:
-			if i[0]=='0':
-				idx=Time_UT.index(i)
-				Time_UT[idx]=i[1]
-	
-		Header_information['Year']=int('20'+Day[2])
-		Header_information['Month']=int(Day[1])
-		Header_information['Day']=int(Day[0])
-		Header_information['Hour']=int(Time_UT[0])
-		
-		
-		# This part of the algoritm adds half of the exposure time to the time when the image was taken.
-		exp_time=float(Data.header['EXPTIME'])
-		minute=int(Time_UT[1])
-		second=float(Time_UT[2])+exp_time/2
-		
-		if second >= 60:
-			Header_information['Minute']=minute+1
-			Header_information['Second']=int(second-60) 
-			Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-			header.append(Header_information)
-		else:
-			Header_information['Minute']=minute
-			Header_information['Second']=int(second)
-			Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-			header.append(Header_information)
-
-	return header
-	
-def WriteAstrometryOutput_Json(Base,DayDirectory,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
-	
-	'''
-	Function that creates a json file with the information about detections from Astrometry:
-	X,Y,(Ra,Dec) calculated, (Ra,Dec) catalogue, Mag calculated, Mag catalogue, Altitude and Azimuthe. 
-	
-	INPUTS:
-	Base 				-> File name without path and ending 						(str)
-	DayDirectory 		-> Directory of present day									(str)
-	config				-> Configuration Dictionary									(dic)
-	Detections			-> SkyCoord Object with image detections (Ra/Dec)			(SkyCoord)
-	DetectionsMags		-> Instrumental magnitudes corresponding to Detections		(np.array)
-	Catalogue			-> SkyCoord Object with catalogue matches (Ra/Dec)			(SkyCoord)
-	CatalogueMags		-> G magnitudes corresponding to Detections					(np.array)
-	found				-> Boolean array with matches								(np.array)
-	
-	OUTPUTS:
-	NONE
-	
-	FILES CREATED:
-	{Base}.json --> the number of files created is related to the number of bases
-	
-	'''
-
-	items_2_store=[]
-	config_information = ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
-	
-	#The location where the images were taken is necessary to convert RA,DEC coordinates to Alt,Az coordinates
-	location=EarthLocation(
-			lat=float(config_information['Latitude'])*u.deg,
-			lon=float(config_information['Longitude'])*u.deg,
-			height=float(config_information['Height'])*u.m)
-	
-	#Header Information of proessed files
-	header=ReadFilesHeader(DayDirectory)
-	
-	for c in range(0,len(header)):
-		
-		#The algoritm only continues when the image of which the header information is associated to is the same as the image of current Base
-		if header[c]['Image'] == str(Base[-2])+str(Base[-1]):
-			time = datetime.datetime(header[c]['Year'],header[c]['Month'],header[c]['Day'],header[c]['Hour'],header[c]['Minute'],header[c]['Second'],header[c]['Microsecond'])
-	
-			for i in range(len(Detections)):
-			
-					Match = found[i]
-					items={}
-					items['image']=str(Base[-2])+str(Base[-1])
-					items['Xdetect']=str(X[i])
-					items['Ydetect']= str(Y[i])
-					items['RaCalculated'] = str(Detections.ra[i].value)
-					items['DecCalculated'] = str( Detections.dec[i].value)
 				
-					if Match:
-						items['Match']= '1'
-						items['RaCatalogue'] = str(Catalogue.ra[i].value)
-						items['DecCatalogue'] = str(Catalogue.dec[i].value)
-						items['MagInst '] = str(DetectionsMags[i])
-						items['MagReal'] =str(CatalogueMags[i])
-						
-					if Match == False:
-						items['Match']= '0'
-						items['MagInst '] = str(DetectionsMags[i])
-						items['MagReal'] ='0'
-					
-		
-					dec=(Detections.dec[i].value)*u.deg
-					ra=(Detections.ra[i].value)*u.deg
-					stars = SkyCoord(ra, dec, frame='icrs')
-					
-					#Converts Ra,Dec to Alt,Az
-					stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
-					sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
-					
-					items['Alt']=str(sky_coords[0])
-					items['Az']=str(sky_coords[1])
-		
-					items_2_store.append(items)
-					
-					with open(f"{DayDirectory + '/OutputFiles/' + Base}.json", 'w') as f: 
-						json.dump(items_2_store, f, indent=3)
-						
-						
 #################################################################################################################################
 #      				  FIND CORRESPONDENCES BETWEEN DETECTIONS OF DIFFERENT IMAGES AND PLOTS
 #################################################################################################################################
