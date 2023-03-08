@@ -1628,8 +1628,7 @@ def CosmicRayCorrection(File,Data,logging):
 
 def ImagePlot(Images)		
 	for i in range(len(Images)):
-
-		Image = f"PAER_SURV_4_263124_230302_122520+212638_89014Df_{Images[i]}"
+		Image = Images[i]
 		Data = CCDData.read(f"{DayDirectory}/ReducedImages/{Image}.fit", unit = 'adu')
 		raw = Data.data
 		
@@ -1887,4 +1886,43 @@ def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	if number == n:
 		ComparacaoEntreImagens(...)
 	
+def FindMatchJson(obj,ImageData,scale):  
+	L1=[sum(obj['RaCalculated'])/len(obj['RaCalculated']),sum(obj['DecCalculated'])/len(obj['DecCalculated'])]
+	for point in ImageData:  #fixates a point an image to compares to all other points from different images
+		FWHM = max(float(point['FWHM']),float(obj['FWHM'])) 
+		L2=[float(point['RaCalculated']),float(point['DecCalculated'])]
+		distance=SPADEFunctions.AngleDifferencePoints(L1,L2)
 	
+
+		if float(distance) <= scale*FWHM/3600:
+			return point
+	
+	return False
+			
+def CompareImagesJson(Images,scale):
+	if len(Images) == 1:
+		raise Exception('Not enough images to compare!')
+	dic = {}
+	Image = Images[0]
+	with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+		Data = json.load(stream)
+	for count,obj in enumerate(Data):
+		dic[count] = {}
+		for i,key in enumerate(obj):
+			dic[count][key] = []
+			dic[count][key].append(float(obj[key]))
+			
+			
+	for count, Image in enumerate(Images[1:-1]):
+		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+			Data = json.load(stream)
+		for i in range(len(dic)):
+			obj = dic[i]
+			Point = FindMatchJson(obj,Data,scale) # Devolve None/False, ou  informacao Objeto 
+			if not Point:
+				dic[len(dic)] = obj
+			else:
+				for count, key in enumerate(list(dic[i].keys())):
+					dic[i][key].append(float(Point[key]))
+	
+	return dic
