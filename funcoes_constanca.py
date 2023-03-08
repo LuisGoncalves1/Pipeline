@@ -24,7 +24,6 @@ import excel2json
 PipelineDirectory = os.getcwd()
 day = "2022-03-20"
 DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
-#Base='MAPA_SURV_4_085283_220417_114004+060023_scan047_03'
 config_file='ConfigurationDefesa.txt'
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
 config['LOGGER'] = int(config['LOGGER'])
@@ -63,9 +62,8 @@ def AngleDifferenceLists(L1,L2):
 
 Links=['https://celestrak.org/NORAD/elements/gp.php?SPECIAL=gpz-plus&FORMAT=tle']
 
-
 ##################################################################################################################################
-# 								 OUTPUT FILES, HEADER INFORMATION, CONFIG FILE INFORMATION
+# 								 Movement Analyses
 ##################################################################################################################################
 
 def files(DayDirectory):
@@ -83,58 +81,14 @@ def files(DayDirectory):
 	'''
 	
 	all_files=[]
-	for ficheiro in os.listdir(path=DayDirectory + '/ProcessedImages/'):				
-		ficheiro=ficheiro[:-5]
-		all_files.append(ficheiro)
+	for ficheiro in os.listdir(path=DayDirectory + '/ProcessedImages/'):	
+		if ficheiro[0] == 'P':			
+			ficheiro=ficheiro[:-4]
+			all_files.append(ficheiro)
 		
 	all_files.sort()
 		
 	return all_files
-	
-def WriteSextractorFile_Json(DayDirectory):
-	'''
-	Function created to read catalogue created from sextractor in json type. It outputs 
-	a list of dictionaries with the information related to each column as values of keys
-	
-	INPUTS:
-	DayDirectory		->   directory of the present day									(str)
-	
-	FILES CREATED:
-	SExtractorOutput.json
-	'''
-	
-	all_files=files(DayDirectory)
-	
-	SEx_directory = DayDirectory + '/SextractorCatalogue/'
-	
-	lst_jsonfile=[]
-	
-	for ficheiro in all_files:
-		
-		filename= SEx_directory + f"{ficheiro}.cat"
-
-		A=fits.open(filename)
-	
-		for i in A[1].data:
-			tmp_dict = {}
-			tmp_dict['image']= str(ficheiro[-2])+str(ficheiro[-1])
-			tmp_dict['number'] = str(i[0])
-			tmp_dict['Flux_isocor'] = str(i[1])
-			tmp_dict['Mag_isocor'] = str(i[2])
-			tmp_dict['MagErr_isocor'] = str(i[3])
-			tmp_dict['Flux_aper'] = str(i[4])
-			tmp_dict['FluxErr_aper'] = str(i[5])
-			tmp_dict['x_image'] = str(i[6])
-			tmp_dict['y_image'] = str(i[7])
-			tmp_dict['Flags'] = str(i[8])
-			tmp_dict['FWHM_Image'] = str(i[9])
-			tmp_dict['Elongation'] = str(i[10])
-			tmp_dict['Flux_Radius'] = str(i[11])
-			tmp_dict['SNR_WIN'] = str(i[12])
-			lst_jsonfile.append(tmp_dict)
-	
-	with open('SExtractorOutput.json', 'w') as f:
-		json.dump(lst_jsonfile, f, indent=3)
 
 def str2bool(BoolStr):
 	''' 
@@ -203,145 +157,22 @@ def ReadFilesHeader(DayDirectory):
 	'''
 	
 	header=[]
+	
 	all_files=files(DayDirectory)
 
 	for ficheiro in all_files:
 		
 		Header_information={}
-		Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + ficheiro}.fits", unit = 'adu') 
+		Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + ficheiro}.fit", unit = 'adu') 
 		
 		Header_information['Image'] =ficheiro[-2]+ficheiro[-1] #Stores the last two strings of file name, that is associated to the image number, so you know to which image the header information is associated to.
 		Header_information['FWHM'] =Data.header['FWHM']
-		Header_information['Dimensions'] =Data.header['NAXIS1']
-		Header_information['Scale']=float(Data.header['SCALE'])
-		Header_information['Alt']=float(Data.header['ALTUR'])
-		Header_information['Az']=float(Data.header['AZIMUTH'])
-		
-		#In current file headers, date and time information is stored in the format: 21/04/23 and 13:09:12.2 (an example)
-		#The code bellow splits the caracters from : and / and returns the strings that begin with 0 with only the second 
-		#element (04 --> 4, 09 --> 9).This is helpful when using datetime module in further analysis, that can't interpret 
-		#month 04 or hour 09. It also adds the string 20 to the caracter asscociated to the year for the same reason (23 --> 2023).
-		
-		Day=Data.header['Date'].split("/") 
-		for i in Day: 
-			if i[0]=='0':
-				idx=Day.index(i)
-				Day[idx]=i[1]
-
-		Time_UT=Data.header['FULLTIME'].split(":")
-
-		for i in Time_UT:
-			if i[0]=='0':
-				idx=Time_UT.index(i)
-				Time_UT[idx]=i[1]
+		header.append(Header_information)
 	
-		Header_information['Year']=int('20'+Day[2])
-		Header_information['Month']=int(Day[1])
-		Header_information['Day']=int(Day[0])
-		Header_information['Hour']=int(Time_UT[0])
-		
-		
-		# This part of the algoritm adds half of the exposure time to the time when the image was taken.
-		exp_time=float(Data.header['EXPTIME'])
-		minute=int(Time_UT[1])
-		second=float(Time_UT[2])+exp_time/2
-		
-		if second >= 60:
-			Header_information['Minute']=minute+1
-			Header_information['Second']=int(second-60) 
-			Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-			header.append(Header_information)
-		else:
-			Header_information['Minute']=minute
-			Header_information['Second']=int(second)
-			Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-			header.append(Header_information)
-
 	return header
 
-def WriteAstrometryOutput_Json(Base,DayDirectory,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
-	
-	'''
-	Function that creates a json file with the information about detections from Astrometry:
-	X,Y,(Ra,Dec) calculated, (Ra,Dec) catalogue, Mag calculated, Mag catalogue, Altitude and Azimuthe. 
-	
-	INPUTS:
-	Base 				-> File name without path and ending 						(str)
-	DayDirectory 		-> Directory of present day									(str)
-	config				-> Configuration Dictionary									(dic)
-	Detections			-> SkyCoord Object with image detections (Ra/Dec)			(SkyCoord)
-	DetectionsMags		-> Instrumental magnitudes corresponding to Detections		(np.array)
-	Catalogue			-> SkyCoord Object with catalogue matches (Ra/Dec)			(SkyCoord)
-	CatalogueMags		-> G magnitudes corresponding to Detections					(np.array)
-	found				-> Boolean array with matches								(np.array)
-	
-	OUTPUTS:
-	NONE
-	
-	FILES CREATED:
-	{Base}.json --> the number of files created is related to the number of bases
-	
-	'''
 
-	items_2_store=[]
-	config_information = ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
-	
-	#The location where the images were taken is necessary to convert RA,DEC coordinates to Alt,Az coordinates
-	location=EarthLocation(
-			lat=float(config_information['Latitude'])*u.deg,
-			lon=float(config_information['Longitude'])*u.deg,
-			height=float(config_information['Height'])*u.m)
-	
-	#Header Information of proessed files
-	header=ReadFilesHeader(DayDirectory)
-	
-	for c in range(0,len(header)):
-		
-		#The algoritm only continues when the image of which the header information is associated to is the same as the image of current Base
-		if header[c]['Image'] == str(Base[-2])+str(Base[-1]):
-			time = datetime.datetime(header[c]['Year'],header[c]['Month'],header[c]['Day'],header[c]['Hour'],header[c]['Minute'],header[c]['Second'],header[c]['Microsecond'])
-	
-			for i in range(len(Detections)):
-			
-					Match = found[i]
-					items={}
-					items['image']=str(Base[-2])+str(Base[-1])
-					items['Xdetect']=str(X[i])
-					items['Ydetect']= str(Y[i])
-					items['RaCalculated'] = str(Detections.ra[i].value)
-					items['DecCalculated'] = str( Detections.dec[i].value)
-				
-					if Match:
-						items['Match']= '1'
-						items['RaCatalogue'] = str(Catalogue.ra[i].value)
-						items['DecCatalogue'] = str(Catalogue.dec[i].value)
-						items['MagInst '] = str(DetectionsMags[i])
-						items['MagReal'] =str(CatalogueMags[i])
-						
-					if Match == False:
-						items['Match']= '0'
-						items['MagInst '] = str(DetectionsMags[i])
-						items['MagReal'] ='0'
-					
-		
-					dec=(Detections.dec[i].value)*u.deg
-					ra=(Detections.ra[i].value)*u.deg
-					stars = SkyCoord(ra, dec, frame='icrs')
-					
-					#Converts Ra,Dec to Alt,Az
-					stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
-					sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
-					
-					items['Alt']=str(sky_coords[0])
-					items['Az']=str(sky_coords[1])
-		
-					items_2_store.append(items)
-					
-					with open(f"{DayDirectory + '/OutputFiles/' + Base}.json", 'w') as f: 
-						json.dump(items_2_store, f, indent=3)
-				
-#X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = SPADEFunctions.CatalogComparison(Base,PipelineDirectory,DayDirectory,config)
-#WriteAstrometryOutput_Json(Base,DayDirectory,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
+
 
 #################################################################################################################################
 #        The purpose of the functions bellow is to find objects that are detected in more than  
@@ -554,6 +385,24 @@ def find_correspondences(DayDirectory):
 
 #find_correspondences(DayDirectory)
 
+
+
+
+
+
+#############################################################################################################################
+# a= ReadFilesHeader(DayDirectory)
+# print(a)
+
+# fwhm=[]
+# for i in a:
+	# fwhm.append(i['FWHM'])
+# plt.hist(fwhm,bins=8)
+# plt.xlabel('Mean FWHM (px)')
+# plt.ylabel('counts')
+# plt.xlim([0,6])
+# plt.show()
+
 ################################################################################################################################
 #														TLES   (ainda em construção)
 ################################################################################################################################
@@ -689,7 +538,7 @@ def SatellitePosition(DayDirectory,PipelineDirectory,config_file):
 				if az.degrees > Az_window[0] and az.degrees< Az_window[1]:
 					print(f"Satelite: {nome}, Alt: {alt.degrees}, Az: {az.degrees}")
 					
-SatellitePosition(DayDirectory,PipelineDirectory,config_file)		
+#SatellitePosition(DayDirectory,PipelineDirectory,config_file)		
 					
 					# Alt.append(alt.degrees)
 					# Az.append(az.degrees)
@@ -704,12 +553,7 @@ SatellitePosition(DayDirectory,PipelineDirectory,config_file)
 		# if len(Alt)!= 0:
 			# TLE_plot(Time,Alt,Az,time_ticks,nome)
 			
-		
-
-
-
-
-
+	
 
 def convertxlsx_to_json():
 	xlsx_file='Oscar - Satellites 2023-03-02.xlsx'
@@ -779,6 +623,71 @@ def SatellitePosition(PipelineDirectory,config_file):
 ################################################################################################################################
 #								RASCUNHOS : NÃO COLOCAR NO SPADEFunctions.py AINDA
 ################################################################################################################################
+
+def scattered_plot_parameters(lst):
+	
+	colors_detections=[]	
+	for i in lst:
+		if len(i)==1:
+			black=(0.2,0.2,0.2)
+			colors_detections.append(black)
+		if len(i)==2:
+			yellow=(1, 1, 0)
+			colors_detections.append(yellow)
+		if len(i)==3:
+			blue=(0, 0.5, 1)
+			colors_detections.append(blue)
+		if len(i)==4:
+			red=(1,0, 0)
+			colors_detections.append(red)
+
+	x=[]
+	y=[]
+	for i in lst:
+		x.append(float(i[0]['RaCalculated']))
+
+	for i in lst:
+		y.append(float(i[0]['DecCalculated']))
+		
+	return x,y,colors_detections
+
+def scatteredplot_all_detections(lst):
+	
+	alldect=scattered_plot_parameters(lst)
+	
+	
+	plt.scatter(
+	x=alldect[0],
+	y=alldect[1],
+	c=alldect[2],
+	alpha=0.5, 
+	)
+	
+	my_xticks=[]
+	x=alldect[0]
+	x.sort()
+	print(x)
+	for i in x:
+		my_xticks.append(decdeg2dms(i))
+
+
+	plt.xticks([x[0], x[-1]], [my_xticks[0], my_xticks[-1]],rotation=0,fontsize=8)
+	
+	my_yticks=[]
+	y=alldect[1]
+	y.sort()
+	for i in y:
+		my_yticks.append(decdeg2dms(i))
+	plt.yticks([y[0], y[-1]], [my_yticks[0], my_yticks[-1]],rotation=0,fontsize=8)
+	
+	
+	plt.title("All Objects")
+	plt.ylabel('Dec (dms)')
+	plt.xlabel('Ra (dms)')
+	
+	plt.show()
+
+
 
 
 def separatedetections(lst1,lst2):	
@@ -904,7 +813,13 @@ def scatterplotonedetection():
 #														Movement plots
 ################################################################################################################################
 
-def plot_detection_movement(detections):
+
+
+
+
+def plot_detection_movement(DayDirectory):
+	
+	
 	
 	x=[]
 	y=[]
@@ -938,7 +853,7 @@ def plot_detection_movement(detections):
 			
 		
 		image+=1
-		text = ["1", "2", "3", "4"]
+		text = ["1", "2", "3", "4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26"]
 		plt.plot(x, y,color='green', linestyle='dashed', linewidth = 3, marker='o', markerfacecolor='blue', markersize=4)
 		for i in range(len(x)):
 			plt.annotate(text[i], (x[i], y[i]))
