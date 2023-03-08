@@ -1,5 +1,6 @@
 import ccdproc 
 from datetime import date
+import datetime
 import os
 from astropy.nddata import CCDData
 import numpy as np
@@ -20,7 +21,7 @@ from astropy.table import Table
 from astropy.coordinates import SkyCoord, Longitude,  Angle, match_coordinates_sky, AltAz, EarthLocation
 import struct
 import requests
-
+import json
 # CATALOG FUNCTIONS
 
 def UCAC5ToTxtTotal(FileIn,FileOutput):
@@ -1373,33 +1374,9 @@ def CosmicRayCorrection(File,Data,logging):
 
 
 ################################################################################################################################
-
-def files(DayDirectory):
-	'''
-	Function created to store a list of the Bases of all the analysed images
-	
-	INPUTS:
-	DayDirectory 		-> directory of the present day									(str)
-	
-	RETURNS:
-	all_files     		-> sortted list of all analysed files					        (lst)
-	
-	FILES CREATED:
-	None
-	'''
-	
-	all_files=[]
-	for ficheiro in os.listdir(path=DayDirectory + '/ProcessedImages/'):
-		if ficheiro[0]=='P':
-			ficheiro=ficheiro[:-5]
-			all_files.append(ficheiro)
+# Constança functions, to write astrometry output and header information in json files
 		
-	all_files.sort()
-		
-	return all_files
-
-			
-def ReadFilesHeader(header,File):
+def ReadFilesHeader(DayDirectory,header,File):
 	
 	'''
 	Function created to return a list of dicts with the header information (time,date,scale,mean fwhm,dimensions) of all processed 
@@ -1416,7 +1393,6 @@ def ReadFilesHeader(header,File):
 	'''
 	
 	data=[]
-		
 	Header_information={}
 
 	Header_information['Image'] =File[-2]+File[-1] #Stores the last two strings of file name, that is associated to the image number, so you know to which image the header information is associated to.
@@ -1456,7 +1432,12 @@ def ReadFilesHeader(header,File):
 	second=float(Time_UT[2])+exp_time/2
 		
 	if second >= 60:
-		Header_information['Minute']=minute+1
+		minute=minute+1
+		if minute >= 60:
+			Header_information['Minute']=int(minute-60) 
+		else:
+			Header_information['Minute']=int(minute)
+			
 		Header_information['Second']=int(second-60) 
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
 		data.append(Header_information)
@@ -1465,6 +1446,11 @@ def ReadFilesHeader(header,File):
 		Header_information['Second']=int(second)
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
 		data.append(Header_information)
+		
+	logging.info("Started Writing Header of image " + File)	
+	with open(f"{DayDirectory + '/OutputFiles/' + File[-6]+File[-5]}_header.json", 'w') as f: 
+				json.dump(data, f, indent=3)
+	logging.info("Finished Writing Header of image " + File)
 
 	return data
 	
@@ -1495,7 +1481,6 @@ def WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, D
 
 	items_2_store=[]
 	
-	logging.info("hello1")
 	#The location where the images were taken is necessary to convert RA,DEC coordinates to Alt,Az coordinates
 	location=EarthLocation(
 			lat=float(config['Latitude'])*u.deg,
@@ -1503,18 +1488,11 @@ def WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, D
 			height=float(config['Height'])*u.m)
 	
 	#Header Information of proessed files
-	
-	logging.info("hello2")
-	
-	
-	header_data=ReadFilesHeader(header,File)
-	logging.info("hello3")
-	print(header_data)
-
+	header_data=ReadFilesHeader(DayDirectory,header,File)
 	#The algoritm only continues when the image of which the header information is associated to is the same as the image of current Base
 	
 	time = datetime.datetime(header_data[0]['Year'],header_data[0]['Month'],header_data[0]['Day'],header_data[0]['Hour'],header_data[0]['Minute'],header_data[0]['Second'],header_data[0]['Microsecond'])
-	logging.info("hello4")
+
 	for i in range(len(Detections)):
 			
 			Match = found[i]
@@ -1541,17 +1519,17 @@ def WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, D
 			dec=(Detections.dec[i].value)*u.deg
 			ra=(Detections.ra[i].value)*u.deg
 			stars = SkyCoord(ra, dec, frame='icrs')
-			
+
 			#Converts Ra,Dec to Alt,Az
 			stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
 			sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
-			
+
 			items['Alt']=str(sky_coords[0])
 			items['Az']=str(sky_coords[1])
 
 			items_2_store.append(items)
 			
-			with open(f"{DayDirectory + '/OutputFiles/' + File}.json", 'w') as f: 
+			with open(f"{DayDirectory + '/OutputFiles/' + File[:-4]}.json", 'w') as f: 
 				json.dump(items_2_store, f, indent=3)
 						
 	logging.info("Finished Writing Output of image " + File)
@@ -1778,9 +1756,6 @@ def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	#WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
 	WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
 	
-	
-
-
 
 ##################################################################################################################################################################
 
