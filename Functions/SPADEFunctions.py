@@ -974,7 +974,7 @@ def RemoveBorders(File,P):
 		A[-1].data = Dados[((Dados['Y_IMAGE']>P) & (Dados['Y_IMAGE']<2048-P)) & ((Dados['X_IMAGE']>P) & (Dados['X_IMAGE']<2048-P))]
 		A.close()
 	
-def WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
+def WriteOutput_Txt(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
 	'''
 	Creates txt Output File with Information about detections:
 	X,Y,(Ra,Dec) calculated, (Ra,Dec) catalogue, Mag calculated, Mag catalogue
@@ -1008,7 +1008,7 @@ def WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, Cat
 	
 	logging.info("Finished Writing Output of image " + File)
 
-def ReadOutput(OutputFile):
+def ReadOutput_Txt(OutputFile):
 	'''
 	Reads an output file created by WriteOutput and returns a dictionary with:
 	{Variable1:[A1,A2,A3],Variable2:[B1,B2,B3]} (strings)
@@ -1210,14 +1210,10 @@ def ReadFilesHeader(DayDirectory,header,File):
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
 		data.append(Header_information)
 		
-	logging.info("Started Writing Header of image " + File)	
-	with open(f"{DayDirectory + '/OutputFiles/' + File[-6]+File[-5]}_header.json", 'w') as f: 
-				json.dump(data, f, indent=3)
-	logging.info("Finished Writing Header of image " + File)
 
 	return data
 	
-def WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
+def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
 	 
 	'''
 	Function that creates a json file with the information about detections from Astrometry:
@@ -1260,22 +1256,23 @@ def WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, D
 			
 			Match = found[i]
 			items={}
-			items['image']=str(File[-2])+str(File[-1])
-			items['Xdetect']=str(X[i])
-			items['Ydetect']= str(Y[i])
-			items['RaCalculated'] = str(Detections.ra[i].value)
-			items['DecCalculated'] = str( Detections.dec[i].value)
-		
+			Base = File.split('.')[0]
+			items['image']=File.split('.')[0][-2:]
+			items['Xdetect']=float(X[i])
+			items['Ydetect']= float(Y[i])
+			items['FWHM']= float(FWHM[i])
+			items['SNR']= float(SNR[i])
+			items['RaCalculated'] = float(Detections.ra[i].value)
+			items['DecCalculated'] = float( Detections.dec[i].value)
+			items['MagInst '] = str(DetectionsMags[i])
+			items['Match']= int(Match)
+			
 			if Match:
-				items['Match']= '1'
 				items['RaCatalogue'] = str(Catalogue.ra[i].value)
 				items['DecCatalogue'] = str(Catalogue.dec[i].value)
-				items['MagInst '] = str(DetectionsMags[i])
 				items['MagReal'] =str(CatalogueMags[i])
 				
-			if Match == False:
-				items['Match']= '0'
-				items['MagInst '] = str(DetectionsMags[i])
+			if not Match:
 				items['MagReal'] ='0'
 			
 
@@ -1292,8 +1289,8 @@ def WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, D
 
 			items_2_store.append(items)
 			
-			with open(f"{DayDirectory + '/OutputFiles/' + File[:-4]}.json", 'w') as f: 
-				json.dump(items_2_store, f, indent=3)
+	with open(f"{DayDirectory}/OutputFiles/{File.split('.')[0]}.json", 'w') as f: 
+		json.dump(items_2_store, f, indent=3)
 						
 	logging.info("Finished Writing Output of image " + File)
 
@@ -1301,7 +1298,7 @@ def WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, D
 
 # Specific Softwares
 
-def sextractor(File,PipelineDirectory,DayDirectory,SexConfig,cattype,VIGNET=None,fit_psf=False):
+def sextractorOld(File,PipelineDirectory,DayDirectory,SexConfig,cattype,VIGNET=None,fit_psf=False):
 	''' 
 	Function to run sextractor on an image and output catalogue file
 	
@@ -1378,7 +1375,64 @@ def sextractor(File,PipelineDirectory,DayDirectory,SexConfig,cattype,VIGNET=None
 	
 			
 	return result
-	    		
+
+def sextractor(File,PipelineDirectory,DayDirectory,SexConfig,n):
+	''' 
+	Function to run sextractor on an image and output catalogue file
+	
+	INPUTS:
+	File 				-> image name to give to sextractor								(str)
+	PipelineDirectory 	-> directory of the Pipeline folder								(str)
+	DayDirectory 		-> directory of the present day									(str)
+	SexConfig 			-> Configuration catalog used for Sextractor					(str)
+	n					-> 1 = default.param, 2 = default1.param, 3 = default2.param	(int)
+	
+	RETURNS:
+	result				-> result sextractor software									(str)
+	
+	FILES CREATED:
+	Writes a sextractor catalog at the day Sextractor folder with the same name as the original image
+	
+	
+	'''
+	Base = File.split('.')[0]
+	FileBase = f"{DayDirectory}/SextractorCatalogue/{Base}"
+	SexFile = f"{DayDirectory}/ReducedImages/{File}"
+	SexDir = f"{PipelineDirectory}/Files/Sextractor/" 				# The sextractor directory is inside the pipeline folder
+	
+	if n == 1:
+		Params = 'default.param'
+		catout = FileBase +'.cat'
+		cattype = 'FITS_1.0'
+		
+	elif n == 2:
+		Params = 'default1.param'
+		catout = FileBase +'LDAC.cat'
+		cattype = 'FITS_LDAC'
+		
+	elif n == 3:
+		Params = 'default2.param'
+		FileBase = FileBase + '_psf'
+		catout = FileBase +'LDAC.cat'
+		cattype = 'FITS_LDAC'
+	
+	cmd = {}		
+	cmd['source-extractor'] = SexFile								# Chooses the image directory as the image to analyse			
+	cmd['-c'] = SexDir + SexConfig									# Chooses the sextractor catalogue as the default in the pipeline folder
+	cmd['-CATALOG_NAME'] =  catout									# Chooses the catalogue output as the catout given in the function
+	cmd['-FILTER_NAME'] = SexDir + 'default.conv'
+	cmd['-WEIGHT_IMAGE'] = SexDir + 'weight.fits'
+	cmd['-CATALOG_TYPE'] = cattype
+	cmd['-PARAMETERS_NAME'] = SexDir + Params						# Chooses the needed files from the sextractor folder
+	if n == 3:
+		cmd['-PSF_NAME'] = FileBase.replace('_psf', 'LDAC_psf.fits')
+	
+	list_cmd = list(itertools.chain.from_iterable(list(cmd.items()))) # Compacts the cmd dictionary created so it can be run through terminal
+	result = subprocess.run(list_cmd, capture_output=True) 			  # Runs the program in terminal and outputs the result and status (0 = good, 255 = bad)
+	
+			
+	return result
+		    		
 def astrometry(DirCatalogo,header,DirAstro,config):
 	''' 
 	Function to run astrometry.net on an image and output created files
@@ -1626,7 +1680,7 @@ def CosmicRayCorrection(File,Data,logging):
 ###########################################################
 # Drawings
 
-def ImagePlot(Images)		
+def ImagePlot(Images):		
 	for i in range(len(Images)):
 		Image = Images[i]
 		Data = CCDData.read(f"{DayDirectory}/ReducedImages/{Image}.fit", unit = 'adu')
@@ -1767,10 +1821,10 @@ def SextractorPart(File,PipelineDirectory,DayDirectory,config):
 	
 	# First Sextractor pass: creates 2 catalogs: one in Fits_1.0 format for use in astrometry.net and 1 in Fits_LDAC for use in PSFEX, then sources too close to the
 	# border are elliminated. The threshold for the distance is the VIGNET parameter given in the configuration file
-	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],'FITS_LDAC',VIGNET = VIGNET)
+	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],1)
 	if config['VERBOSE']:
 		print(result)
-	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],'FITS_1.0')
+	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],2)
 	if config['VERBOSE']:
 		print(result)
 	RemoveBorders(FileBase +'LDAC.cat',int(config['VIGNET']))
@@ -1791,7 +1845,7 @@ def SextractorPart(File,PipelineDirectory,DayDirectory,config):
 	
 	#Lastly, Sextractor is run again with the PSF model, in order to improve photometry
 	logging.info("Finished Sextractor Pass of " + File)
-	resultado = sextractor(Base,PipelineDirectory,DayDirectory,config['SexConfig'],'FITS_LDAC',VIGNET = VIGNET,fit_psf = True)
+	resultado = sextractor(Base,PipelineDirectory,DayDirectory,config['SexConfig'],3)
 
 def AstrometryPart(File,PipelineDirectory,DayDirectory,config,header):
 	'''
@@ -1852,7 +1906,6 @@ def CatalogComparison(File,PipelineDirectory,DayDirectory,config,Filter):
 	FileXY = f"{DayDirectory}/SextractorCatalogue/{Base}.cat"														# Gets directory : catalogue created from sextractor
 	FileWc = f"{DayDirectory}/AstrometryFiles/{Base}.wcs"															# Gets directory : WCS file created from astrometry
 	
-	
 	#Gets the information from the sextractor file and the calculated positions
 	Posicoes = fits.open(FileOutput)												# Gets positions calculated
 	Ra,Dec = Posicoes[-1].data['RA'],Posicoes[-1].data['DEC']
@@ -1881,8 +1934,8 @@ def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	SextractorPart(File,PipelineDirectory,DayDirectory,config)
 	AstrometryPart(File,PipelineDirectory,DayDirectory,config,header)
 	X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = CatalogComparison(File,PipelineDirectory,DayDirectory,config,header['FILTER'])
-	#WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
-	WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
+	# ~ WriteOutput_Txt(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
+	WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
 	if number == n:
 		ComparacaoEntreImagens(...)
 	
@@ -1899,7 +1952,7 @@ def FindMatchJson(obj,ImageData,scale):
 	
 	return False
 			
-def CompareImagesJson(Images,scale):
+def CompareImagesJson(DayDirectory,Images,scale):
 	if len(Images) == 1:
 		raise Exception('Not enough images to compare!')
 	dic = {}
@@ -1926,3 +1979,37 @@ def CompareImagesJson(Images,scale):
 					dic[i][key].append(float(Point[key]))
 	
 	return dic
+
+
+##################################################################################################################################################################
+
+# In Development
+
+def CompareImagesTXT(Images):
+	if len(Images) == 1:
+		raise Exception('Not enough images to compare!')
+	dic = {}
+	Image = Images[0]
+	OutputFile = f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}"
+	Data = SPADEFunctions.ReadOutput(OutputFile)
+	for obj in range(len(Data['X'])):
+		dic[obj] = {}
+		dic['Image'] = [1]
+		keys = Data.keys()
+		for count, key in enumerate(keys):
+			dic[obj][key] = [Data[key][obj]]
+	
+	
+	for count, Image in enumerate(Images[1:-1]):
+		OutputFile = f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}"
+		Data = SPADEFunctions.ReadOutput(OutputFile)
+		time.sleep(500)
+		
+		for i in range(len(dic)):
+			obj = dic[i]
+			Valor = FindMatch(obj,Data) # Devolve None/False, ou  informacao Objeto 
+			if Valor:
+				for count, key in enumerate(dic[obj]):
+					dic[obj][key] = dic[obj][key].append(Valor[key])
+			else:
+				dic[len(dic)] = Valor
