@@ -5,6 +5,7 @@ Latitude 40.182416
 Longitude -7.874175
 Height 910
 
+
 LOGGER 10
 Catalog UCAC5					# Catalog to be used, the options implemented are: Tycho2 (tycho2.dat file), UCAC4 (UCAC4 folder), UCAC5 (UCAC5 folder), Hipparchos (hipparcos.fits files)  
 MagLim 15

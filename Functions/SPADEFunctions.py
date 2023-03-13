@@ -1155,11 +1155,10 @@ def ReadFilesHeader(DayDirectory,header,File):
 	None
 	'''
 	
-	data=[]
+
 	Header_information={}
 
-	Header_information['Image'] =File[-2]+File[-1] #Stores the last two strings of file name, that is associated to the image number, so you know to which image the header information is associated to.
-	Header_information['FWHM'] =header['FWHM']
+	Header_information['Image'] =File[-6]+File[-5] #Stores the last two strings of file name, that is associated to the image number, so you know to which image the header information is associated to.
 	Header_information['Dimensions'] =header['NAXIS1']
 	Header_information['Scale']=float(header['SCALE'])
 	Header_information['Alt']=float(header['ALTUR'])
@@ -1203,12 +1202,11 @@ def ReadFilesHeader(DayDirectory,header,File):
 			
 		Header_information['Second']=int(second-60) 
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-		data.append(Header_information)
+	
 	else:
 		Header_information['Minute']=minute
 		Header_information['Second']=int(second)
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-		data.append(Header_information)
 		
 
 	return data
@@ -1239,7 +1237,7 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 	logging.info("Started Writing Output of image " + File)
 
 	items_2_store=[]
-	
+
 	#The location where the images were taken is necessary to convert RA,DEC coordinates to Alt,Az coordinates
 	location=EarthLocation(
 			lat=float(config['Latitude'])*u.deg,
@@ -1247,10 +1245,11 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 			height=float(config['Height'])*u.m)
 	
 	#Header Information of proessed files
+
 	header_data=ReadFilesHeader(DayDirectory,header,File)
+
 	#The algoritm only continues when the image of which the header information is associated to is the same as the image of current Base
-	
-	time = datetime.datetime(header_data[0]['Year'],header_data[0]['Month'],header_data[0]['Day'],header_data[0]['Hour'],header_data[0]['Minute'],header_data[0]['Second'],header_data[0]['Microsecond'])
+	time = datetime.datetime(header_data['Year'],header_data['Month'],header_data['Day'],header_data['Hour'],header_data['Minute'],header_data['Second'],header_data['Microsecond'])
 
 	for i in range(len(Detections)):
 			
@@ -1274,6 +1273,7 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 				
 			if not Match:
 				items['MagReal'] ='0'
+
 			
 
 			dec=(Detections.dec[i].value)*u.deg
@@ -1284,8 +1284,8 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 			stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
 			sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
 
-			items['Alt']=str(sky_coords[0])
-			items['Az']=str(sky_coords[1])
+			items['Alt']=float(sky_coords[0])
+			items['Az']=float(sky_coords[1])
 
 			items_2_store.append(items)
 			
@@ -1936,8 +1936,9 @@ def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = CatalogComparison(File,PipelineDirectory,DayDirectory,config,header['FILTER'])
 	# ~ WriteOutput_Txt(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
 	WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
-	if number == n:
-		ComparacaoEntreImagens(...)
+
+	#WriteOutput(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
+	WriteAstrometryOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
 	
 def FindMatchJson(obj,ImageData,scale):  
 	L1=[sum(obj['RaCalculated'])/len(obj['RaCalculated']),sum(obj['DecCalculated'])/len(obj['DecCalculated'])]
