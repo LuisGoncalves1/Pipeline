@@ -13,58 +13,17 @@ import astropy.units as u
 import requests
 from skyfield.api import EarthSatellite
 from skyfield.api import load, wgs84,utc
-import statistics
 
 PipelineDirectory = os.getcwd()
 day = "2022-03-20"
 DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
 config_file='ConfigurationDefesa.txt'
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
-
 ficheiro='MAPA_SURV_4_085283_220417_114004+060023_scan047_01.fits'
 tle_file='2022tle.json'
-Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + ficheiro}", unit = 'adu') 
-header=Data.header
-
-#Testing fwhm 
-
-def testing_fwhm(ficheiro,DayDirectory):
-	fwhm=[]
-	with open(f"{DayDirectory + '/OutputFiles/' + ficheiro}.json", 'r') as stream:
-		jsonfile = json.load(stream)
-		for i in jsonfile:
-			fwhm.append(i['FWHM'])
-	print(statistics.median(fwhm))
-	plt.hist(fwhm,bins=1000)
-	plt.xlim(0,20)
-	plt.show()
+# Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + ficheiro}", unit = 'adu') 
+# header=Data.header
 	
-
-def tle_txt_to_json(filename):
-	
-	items_2_store=[]
-	tmp_dict={}
-	with open(filename,'r') as fp:
-		tle_data= fp.read().splitlines() 
-		for i in tle_data:
-			if i[0] != '1' and i[0] != '2':
-				tmp_dict['satellite_name'] = i
-			if i[0] == '1':
-				tmp_dict['tle_1'] = i
-			if i[0] == '2':
-				tmp_dict['tle_2'] = i
-
-			if "tle_1" in tmp_dict and "tle_2" in tmp_dict and "satellite_name" in tmp_dict:
-				items_2_store.append(tmp_dict)
-				tmp_dict={}
-				
-	with open(f"{filename[:-4]}.json", 'w') as f:
-			json.dump(items_2_store, f, indent=3)
-
-
-#convertion=SPADEFunctions.XYToRaDec(FileWc,FileXY,FileOutput)
-
-
 def SatellitePosition(config,header,tle_file,DayDirectory,ficheiro,scale):
 	'''
 	SatellitePosition() loads the satellites information from the TLEs saved in the .json file from the ReadTLES(Links) function, 
@@ -108,10 +67,6 @@ def SatellitePosition(config,header,tle_file,DayDirectory,ficheiro,scale):
 			print(f"Satellite {nome}, alt:{alt.degrees},az:{az.degrees}")
 		
 
-#SatellitePosition(config,header,tle_file,DayDirectory,ficheiro,scale=4.7)
-
-
-
 def CreateRDLSFile(X,Y,FileName):
 	''' 
 	Function that changes the data from the RLDS file to a set of (Ra,Dec) coordinates.
@@ -130,83 +85,122 @@ def CreateRDLSFile(X,Y,FileName):
 	with fits.open(FileName, mode = 'update') as A:
 		Dados = A[1].data
 	
-		x = np.array(X,Y,dtype = [('X_IMAGE', '>f4'),('Y_IMAGE', '>f4')])
-		Dados = Dados[Dados['X_IMAGE'] > 2049] #elimina os dados menores 2049
-		Dados = np.append(Dados,x)
-		
+		# Define the field names and types for X and Y separately
+		X_fields = [('X_IMAGE', '>f4')]
+		Y_fields = [('Y_IMAGE', '>f4')]
 
+		# Concatenate the field definitions
+		fields = X_fields + Y_fields
+
+		# Create the structured array using np.rec.fromarrays()
+		x = np.rec.fromarrays([X, Y], dtype=fields)
+		
+		Dados = Dados[Dados['X_IMAGE'] > 2049] #elimina os dados menores 2049
+		
+		Dados=np.concatenate([Dados,x])
 		A.close()
 
-X=np.array([1,1,2048,2048])
-Y=np.array([1,2048,1,2048])
-FileName='teste.cat'
-CreateRDLSFile(X,Y,FileName)
+# X=[1,1,2048,2048]
+# Y=[1,2048,1,2048]
+# FileName='teste.cat'
+# CreateRDLSFile(X,Y,FileName)
 
 
-
-
-
-
-def scattered_plot_parameters(lst):
+def TLE_parameters():
+	data=[]
+	with open('Full Catalog-20230228T0000.tle','r') as fp:
+		GP_elements= fp.read().splitlines() 
+		print(len(GP_elements))
+		for i in GP_elements:
+			if i[0] == '2':
+				
+				temp={}
+				temp['Catalog Number']=i[2:7]
 	
-	colors_detections=[]	
-	for i in lst:
-		if len(i)==1:
-			black=(0.2,0.2,0.2)
-			colors_detections.append(black)
-		if len(i)==2:
-			yellow=(1, 1, 0)
-			colors_detections.append(yellow)
-		if len(i)==3:
-			blue=(0, 0.5, 1)
-			colors_detections.append(blue)
-		if len(i)==4:
-			red=(1,0, 0)
-			colors_detections.append(red)
+				eccentricity=float('0.'+i[26:33])
+				temp['Eccentricity']=eccentricity  
 
-	x=[]
-	y=[]
-	for i in lst:
-		x.append(float(i[0]['RaCalculated']))
+				mean_motion=float(i[52:63]) #revolutions per day 
+	
+				convertion=((2*np.pi)/(24*3600))
+				mean_motion=mean_motion*convertion #radians per second
 
-	for i in lst:
-		y.append(float(i[0]['DecCalculated']))
-		
-	return x,y,colors_detections
+				temp['Mean Motion']=mean_motion 
 
-def scatteredplot_all_detections(lst):
+				mu=3.986004418*10**5 #in km³/s², standard gravitacional parameter of the Earth
+				a=(mu**(1/3))/(mean_motion**(2/3)) # calculates the semi-major axis
+
+				temp['Semi-major Axis']=a #in kms
 	
-	alldect=scattered_plot_parameters(lst)
+				Perigee=(a*(1-eccentricity)-6378.1)
+				temp['Perigee']=Perigee #in kms
+	
+				Apogee=(a*(1+eccentricity)-6378.1)
+				temp['Apogee']=Apogee #in kms
+	
+				if Perigee<200 and Apogee>200:
+					temp['Perigee']=Perigee #in kms
+					temp['Apogee']=Apogee #in kms
+					data.append(temp)
+									
+	print(len(data))
+	
+TLE_parameters()
+
+#verify calculations 
+
+def verify_calculations():
+	
+	i='2 41729   0.0477  98.5584 0002767 195.8549 260.0049  1.00271002 24151'
+	temp={}
+	temp['Catalog Number']=i[2:7]
+	
+	eccentricity=float('0.'+i[26:33])
+	temp['Eccentricity']=eccentricity  
+
+	mean_motion=float(i[52:63]) #revolutions per day 
+	
+	convertion=((2*np.pi)/(24*3600))
+	mean_motion=mean_motion*convertion #radians per second
+
+	temp['Mean Motion']=mean_motion 
+
+	mu=3.986004418*10**5 #in km³/s², standard gravitacional parameter of the Earth
+	a=(mu)**(1/3)/(mean_motion**(2/3)) # calculates the semi-major axis
 	
 	
-	plt.scatter(
-	x=alldect[0],
-	y=alldect[1],
-	c=alldect[2],
-	alpha=0.5, 
-	)
+	temp['Semi-major Axis']=a #in kms
+	print(a*(1-eccentricity))
+	Perigee=(a*(1-eccentricity)-6378.1)*10**(-3)
+	temp['Perigee']=Perigee #in kms
 	
-	my_xticks=[]
-	x=alldect[0]
-	x.sort()
-	print(x)
-	for i in x:
-		my_xticks.append(decdeg2dms(i))
+	Apogee=(a*(1+eccentricity)-6378.1)*10**(-3)
+	temp['Apogee']=Apogee #in kms
+	
+	print(temp)
 
 
-	plt.xticks([x[0], x[-1]], [my_xticks[0], my_xticks[-1]],rotation=0,fontsize=8)
+#verify_calculations()
+def backwards_calculation():
 	
-	my_yticks=[]
-	y=alldect[1]
-	y.sort()
-	for i in y:
-		my_yticks.append(decdeg2dms(i))
-	plt.yticks([y[0], y[-1]], [my_yticks[0], my_yticks[-1]],rotation=0,fontsize=8)
+	i='2 27952   7.5703  29.0833 7144309   6.0011 182.2870  2.25976661160559'
+	temp={}
+	temp['Catalog Number']=i[2:7]
+	
+	eccentricity=float('0.'+i[26:33])
+	Apogee=35.676
+	
+	a=Apogee/(1+eccentricity)
+	temp['Semi-major Axis']=a 
+	
+	miu=3.986004418*10**5 #in km³/s², standard gravitacional parameter of the Earth
+	
+	n=np.sqrt(miu/(a**3))
+	temp['Mean Motion']=n
+	
+	convertion=n/(2.25976661)
+	print(temp)
+	print(convertion)
 	
 	
-	plt.title("All Objects")
-	plt.ylabel('Dec (dms)')
-	plt.xlabel('Ra (dms)')
-	
-	plt.show()
-	
+#backwards_calculation()
