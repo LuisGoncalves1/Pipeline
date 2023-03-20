@@ -20,6 +20,10 @@ DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
 config_file='ConfigurationDefesa.txt'
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
 
+
+X=[1,1,2048,2048]
+Y=[1,2048,1,2048]
+FileName='comparison.cat'
 	
 def CreateRDLSFile(X,Y,FileName):
 	''' 
@@ -36,9 +40,7 @@ def CreateRDLSFile(X,Y,FileName):
 	FILES CHANGED:
 	FileName			-> Changes Ra,Dec information to match with Ra,Dec given		(rdls)
 	'''
-	
 	with fits.open(FileName, mode = 'update') as A:
-		Dados = A[1].data
 
 		# Define the field names and types for X and Y separately
 		X_fields = [('X_IMAGE', '>f4')]
@@ -49,16 +51,22 @@ def CreateRDLSFile(X,Y,FileName):
 
 		# Create the structured array using np.rec.fromarrays()
 		x = np.rec.fromarrays([X, Y], dtype=fields)
-		print(x)
-		Dados = Dados[Dados['X_IMAGE'] > 2049] #elimina os dados menores 2049
-		print(Dados)
-		Dados = np.append(Dados,x)
+
+		A[1].data[A[1].data['X_IMAGE'] > 2049] #elimina os dados menores 2049
+		
+		A[1].data = np.array(x) # Convert the list of tuples to a NumPy array
+
 		A.close()
 
-X=[1,1,2048,2048]
-Y=[1,2048,1,2048]
-FileName='teste.cat'
-CreateRDLSFile(X,Y,FileName)
+
+
+FileWc='PAER_SURV_4_260789_230228_080700-051142_scan102_01.wcs'
+FileXY='comparison.cat'
+FileOutput='image1.fi'
+
+SPADEFunctions.XYToRaDec(FileWc,FileXY,FileOutput)
+
+
 
 
 def TLE_parameters(tle_catalogfile):
@@ -112,6 +120,7 @@ def SatellitePosition(config,DayDirectory,ficheiros):
 	ts = load.timescale()
 	
 	info=[]
+	
 	
 	for image in ficheiros:
 	
