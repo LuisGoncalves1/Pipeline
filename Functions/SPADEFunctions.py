@@ -1939,48 +1939,270 @@ def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	if number == n:
 		ComparacaoEntreImagens(...)
 	
-def FindMatchJson(obj,ImageData,scale):  
-	L1=[sum(obj['RaCalculated'])/len(obj['RaCalculated']),sum(obj['DecCalculated'])/len(obj['DecCalculated'])]
-	for point in ImageData:  #fixates a point an image to compares to all other points from different images
-		FWHM = max(float(point['FWHM']),obj['FWHM'][0]) 
-		L2=[float(point['RaCalculated']),float(point['DecCalculated'])]
-		distance=AngleDifferencePoints(L1,L2)
+def FindMatchJson(obj,ImageData,scale): 
+	''' 
+	Function finds match between an object and all points in a Json file (bad, slow)
 	
+	INPUTS:
+	obj			 		-> Dict of all information from obj from json file					(str)
+	ImageData	 		-> Image data with objects of the same type as obj 			 		(dic)
+	scale 				-> pixel scale used for comparison						 			(float)
+	
+	RETURNS: 
+	key					-> number of object that is matched or False if no match			(CCDData)
+	
+	FILES CREATED:
+	NONE
+	''' 
+	L1=[obj['RaCalculated'],obj['DecCalculated']]
+	for key,point in ImageData.items():  #fixates a point an image to compares to all other points from different images
+		FWHM = max(np.mean(point['FWHM']),obj['FWHM']) 
+		L2=[np.mean(point['RaCalculated']),np.mean(point['DecCalculated'])]
+		distance=AngleDifferencePoints(L1,L2)
 
 		if float(distance) <= scale*FWHM/3600:
-			return point
+			return key
 	
 	return False
 			
 def CompareImagesJson(DayDirectory,Images,scale):
+	''' 
+	Function compares Json files to identify unique detections from each image. Slow and bad, use CompareImagesSkyCoord2
+	
+	INPUTS:
+	DayDirectory 		-> Directory of present day											(str)
+	Images		 		-> JsonFiles corresponding to detections		 			 		(list)
+	scale 				-> pixel scale used for comparison						 			(float)
+	
+	RETURNS: 
+	dic					-> dictionary with all unique sources and information for each		(CCDData)
+	
+	FILES CREATED:
+	NONE
+	''' 
 	if len(Images) == 1:
 		raise Exception('Not enough images to compare!')
 	dic = {}
 	Image = Images[0]
 	with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
-		Data = json.load(stream)
-	for count,obj in enumerate(Data):
+		ImageData = json.load(stream)
+	for count,obj in enumerate(ImageData):
 		dic[count] = {}
 		for i,key in enumerate(obj):
 			dic[count][key] = []
 			dic[count][key].append(float(obj[key]))
-			
-			
+	
 	for count, Image in enumerate(Images[1:]):
 		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
-			Data = json.load(stream)
-		for i in range(len(dic)):
-			obj = dic[i]
-			Point = FindMatchJson(obj,Data,scale) # Devolve None/False, ou  informacao Objeto 
+			ImageData = json.load(stream)
+		for obj in ImageData:
+			Point = FindMatchJson(obj,dic,scale) # Devolve False ou chave do match
 			if not Point:
-				dic[len(dic)] = obj
+				dic[len(dic)] = {}
+				for i,key in enumerate(obj):
+					dic[len(dic)-1][key] = []
+					dic[len(dic)-1][key].append(float(obj[key]))
 			else:
-				for count, key in enumerate(list(dic[i].keys())):
-					dic[i][key].append(float(Point[key]))
-	
+				for count2, key in enumerate(list(dic[Point].keys())):
+					if (key in dic[Point]) & (key in obj):
+						dic[Point][key].append(float(obj[key]))
 	return dic
 
+def CompareImagesJsonSkyCoord(DayDirectory,Images,scale):
+	''' 
+	Function compares Json files to identify unique detections from each image using SkyCoord. Has a error that I don't know what.
+	
+	INPUTS:
+	DayDirectory 		-> Directory of present day											(str)
+	Images		 		-> JsonFiles corresponding to detections		 			 		(list)
+	scale 				-> pixel scale used for comparison						 			(float)
+	
+	RETURNS: 
+	dic					-> dictionary with all unique sources and information for each		(CCDData)
+	
+	FILES CREATED:
+	NONE
+	''' 
+	
+	if len(Images) == 1:
+		raise Exception('Not enough images to compare!')
+	dic = {}
+	Image = Images[0]
+	Ra1 = []
+	Dec1 = []
+	with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+		ImageData = json.load(stream)
+	for count,obj in enumerate(ImageData):
+		dic[count] = {}
+		Ra1.append(obj['RaCalculated'])
+		Dec1.append(obj['DecCalculated'])  	
+		for i,key in enumerate(obj):
+			dic[count][key] = []
+			dic[count][key].append(float(obj[key]))
+	
+	for count, Image in enumerate(Images[1:]):
+		RaN = []
+		DecN = []
+		FWHM = []
+		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+			ImageData = json.load(stream)
+		for obj in ImageData:
+			RaN.append(obj['RaCalculated'])
+			DecN.append(obj['DecCalculated'])
+			FWHM.append(obj['FWHM'])
+			
+		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Sources of all previous images
+		DetectionsN = SkyCoord(ra = Longitude(RaN, unit = u.deg), dec = np.array(DecN)*u.deg, frame = 'cirs')  		# Sources of image N
+		idx, d2d, d3d = match_coordinates_sky(Detections1, DetectionsN,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
+		mask = d3d < np.radians(scale*np.median(FWHM)/3600)
+		for i,found in enumerate(mask):
+			obj = ImageData[idx[i]]
+			if found:
+				for key in list(dic[i].keys()):
+					if key in obj:
+						dic[i][key].append(float(obj[key]))
+				
+			else:
+				Ra1.append(obj['RaCalculated'])
+				Dec1.append(obj['DecCalculated'])
+				dic[len(dic)] = {}
+				for j,key in enumerate(obj):
+					dic[len(dic)-1][key] = []
+					dic[len(dic)-1][key].append(float(obj[key]))
+	return dic
 
+def CompareImagesJsonSkyCoord2(DayDirectory,Images,scale):
+	''' 
+	Function compares Json files to identify unique detections from each image with SkyCoord. Best version to use.
+	
+	INPUTS:
+	DayDirectory 		-> Directory of present day											(str)
+	Images		 		-> JsonFiles corresponding to detections		 			 		(list)
+	scale 				-> pixel scale used for comparison						 			(float)
+	
+	RETURNS: 
+	dic					-> dictionary with all unique sources and information for each		(CCDData)
+	
+	FILES CREATED:
+	NONE
+	''' 
+	if len(Images) == 1:
+		raise Exception('Not enough images to compare!')
+	dic = {}
+	Image = Images[0]
+	Ra1 = []
+	Dec1 = []
+	with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+		ImageData = json.load(stream)
+	for count,obj in enumerate(ImageData):
+		dic[count] = {}
+		Ra1.append(obj['RaCalculated'])
+		Dec1.append(obj['DecCalculated'])  	
+		for i,key in enumerate(obj):
+			dic[count][key] = []
+			dic[count][key].append(float(obj[key]))
+	
+	for count, Image in enumerate(Images[1:]):
+		RaN = []
+		DecN = []
+		FWHM = []
+		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+			ImageData = json.load(stream)
+		for obj in ImageData:
+			RaN.append(obj['RaCalculated'])
+			DecN.append(obj['DecCalculated'])
+			FWHM.append(obj['FWHM'])
+			
+		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Sources of all previous images
+		DetectionsN = SkyCoord(ra = Longitude(RaN, unit = u.deg), dec = np.array(DecN)*u.deg, frame = 'cirs')  		# Sources of image N
+		idx, d2d, d3d = match_coordinates_sky(DetectionsN, Detections1,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
+		mask = d3d < np.radians(scale*np.median(FWHM)/3600)
+		for i,found in enumerate(mask):
+			obj = ImageData[i]
+			if found:
+				for key in list(dic[idx[i]].keys()):
+					if key in obj:
+						dic[idx[i]][key].append(float(obj[key]))
+				
+			else:
+				Ra1.append(obj['RaCalculated'])
+				Dec1.append(obj['DecCalculated'])
+				dic[len(dic)] = {}
+				for j,key in enumerate(obj):
+					dic[len(dic)-1][key] = []
+					dic[len(dic)-1][key].append(float(obj[key]))
+	return dic
+
+def SeeVariation(dic_unicas,max_sep):
+	'''
+	Number -> number of object in dic
+	
+	
+	
+	'''
+	objects = {}
+	Number1,Ra1,Dec1 = dic_unicas[1]['Number'],  dic_unicas[1]['Ra'],  dic_unicas[1]['Dec']
+	for i in range(len(Number1)):
+		objects[i] = {}
+		objects[i]['Ra'] = [Ra1[i]]
+		objects[i]['Dec'] = [Dec1[i]]
+		objects[i]['Number'] = [Number1[i]]
+
+	for image in range(len(dic_unicas)-1):
+		print(image)
+		Number2,Ra2,Dec2 = dic_unicas[image+2]['Number'],dic_unicas[image+2]['Ra'],dic_unicas[image+2]['Dec']
+			
+		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
+		Detections2 = SkyCoord(ra = Longitude(Ra2, unit = u.deg), dec = np.array(Dec2)*u.deg, frame = 'cirs')  		# Sources of image N+1
+			
+		idx, d2d, d3d = match_coordinates_sky(Detections2, Detections1,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
+		mask = d3d < max_sep
+			
+		for count,found in enumerate(mask):
+			if found:
+				objects[count]['Number'].append(Number2[count])
+				objects[count]['Ra'].append(Ra2[count])
+				objects[count]['Dec'].append(Dec2[count])
+			else:
+				nnew = len(objects)
+				objects[nnew] = {}
+				objects[nnew]['Ra'] = [Ra2[count]]
+				objects[nnew]['Dec'] = [Dec2[count]]
+				objects[nnew]['Number'] = [Number2[count]]
+			
+		Ra1  = []
+		Dec1 = []
+		for i in range(len(objects)):
+			Ra1.append(objects[i]['Ra'][-1])
+			Dec1.append(objects[i]['Dec'][-1])
+	
+	return objects
+	
+def MakeDicUnique(dic):
+	dic_unicas = {}
+	for i,key in enumerate(dic):
+		if len(dic[key]['image']) == 1:
+			n_image = int(dic[key]['image'][0])
+			
+			if n_image in dic_unicas:
+				dic_unicas[n_image]['Number'].append(key)
+				dic_unicas[n_image]['Ra'].append(dic[key]['RaCalculated'][0])
+				dic_unicas[n_image]['Dec'].append(dic[key]['DecCalculated'][0])
+			else:
+				dic_unicas[n_image] = {}
+				dic_unicas[n_image]['Number'] = [key]
+				dic_unicas[n_image]['Ra'] = dic[key]['RaCalculated']
+				dic_unicas[n_image]['Dec'] = dic[key]['DecCalculated']
+	return dic_unicas
+	
+def CleanObjects(Objects):
+	for obj in range(len(Objects)):
+		if len(Objects[obj]['Ra']) < 3:
+			del Objects[obj]
+	
+	return Objects
+	
+	
 ##################################################################################################################################################################
 
 # In Development
