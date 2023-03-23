@@ -14,6 +14,7 @@ import requests
 from skyfield.api import EarthSatellite
 from skyfield.api import load, wgs84,utc
 
+
 PipelineDirectory = os.getcwd()
 day = "2022-03-20"
 DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
@@ -25,20 +26,20 @@ config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" 
 #Y=[1,2048,1,2048]
 #FileName='comparison.cat'
 	
-def CreateRDLSFile_XY(X,Y,FileName):
+def CreateCatFile_XY(X,Y,FileName):
 	''' 
-	Function that changes the data from the RLDS file to a set of (Ra,Dec) coordinates.
+	Function that changes the data from the cat file to a set of (x,y) coordinates.
 	
 	INPUTS:
-	Ra 					-> array with Ra coordinates									(list)
-	Dec 				-> array with Dec coordinates									(list)
-	FileName 			-> Name of rdls file											(rdls)
+	Ra 					-> array with x coordinates									(list)
+	Dec 				-> array with y coordinates									(list)
+	FileName 			-> Name of cat file											(rdls)
 	
 	RETURNS:
 	NONE
 	
 	FILES CHANGED:
-	FileName			-> Changes Ra,Dec information to match with Ra,Dec given		(rdls)
+	FileName			-> Changes x,y information to match with x,y given		(rdls)
 	'''
 	with fits.open(FileName, mode = 'update') as A:
 
@@ -57,6 +58,44 @@ def CreateRDLSFile_XY(X,Y,FileName):
 		A[1].data = np.array(x) # Convert the list of tuples to a NumPy array
 
 		A.close()
+		
+		
+def CreateRDLSFile_RaDEC(Ra,Dec,FileName):
+	''' 
+	Function that changes the data from the RLDS file to a set of (Ra,Dec) coordinates.
+	
+	INPUTS:
+	Ra 					-> array with Ra coordinates									(list)
+	Dec 				-> array with Dec coordinates									(list)
+	FileName 			-> Name of rdls file											(rdls)
+	
+	RETURNS:
+	NONE
+	
+	FILES CHANGED:
+	FileName			-> Changes Ra,Dec information to match with Ra,Dec given		(rdls)
+	
+	'''
+
+	with fits.open(FileName, mode = 'update') as A:
+
+		# Define the field names and types for X and Y separately
+		
+		X_fields = [('RA', '<f8')]
+		Y_fields = [('DEC','<f8')]
+
+		# Concatenate the field definitions
+		fields = X_fields + Y_fields
+
+		# Create the structured array using np.rec.fromarrays()
+		x = np.rec.fromarrays([Ra, Dec], dtype=fields)
+		
+		A[1].data=A[1].data[A[1].data['RA'] > 180] #elimina os dados menores 2049
+		
+		
+		A[1].data = np.array(x) # Convert the list of tuples to a NumPy array
+
+		A.close()
 
 
 def TLE_parameters(tle_catalogfile):
@@ -71,7 +110,7 @@ def TLE_parameters(tle_catalogfile):
 		
 		for i in GP_elements:
 			temp={}
-			temp['Satellite Number']=i['tle_2'][3:7]
+			temp['Satellite Number']=i['tle_2'][2:8]
 			temp['tle_1']=i['tle_1']
 			temp['tle_2']=i['tle_2']
 			
@@ -102,12 +141,12 @@ FIT_Files=['PAER_SURV_4_260789_230228_080700-051142_scan102_01.fit',
 
 FileXY='comparison.cat'
 
-def AltAz_window(DayDirectory,FIT_Files,FileXY,config):
+def AltAz_window(DayDirectory,image,FileXY,config,info):
 	
-	#for files in FIT_Files:
-	#	FileWc=f'{DayDirectory}/AstrometryFiles/{files.split(".")[0]}.wcs'
-	#	FileOutput=f'{files.split(".")[0]}'
-		#SPADEFunctions.XYToRaDec(FileWc,FileXY,FileOutput)
+	
+	FileWc=f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}.wcs'
+	FileOutput=f'{image.split(".")[0]}'
+	SPADEFunctions.XYToRaDec(FileWc,FileXY,FileOutput)
 		
 
 	location=EarthLocation(
@@ -118,81 +157,72 @@ def AltAz_window(DayDirectory,FIT_Files,FileXY,config):
 	Alt=[]
 	Az=[]
 
-	for image in FIT_Files:
-		
-		
-		Data = CCDData.read(f"{DayDirectory}/ProcessedImages/{image}", unit = 'adu') 
-		header=Data.header
+	time = datetime.datetime(info['Year'],info['Month'],info['Day'],info['Hour'],info['Minute'],info['Second'],info['Microsecond'])
 
-		header_data=SPADEFunctions.ReadFilesHeader(DayDirectory,header,image)
-		time = datetime.datetime(header_data['Year'],header_data['Month'],header_data['Day'],header_data['Hour'],header_data['Minute'],header_data['Second'],header_data['Microsecond'])
-
-		A=fits.open(f'{image.split(".")[0]}')
+	A=fits.open(f'{image.split(".")[0]}')
 		
-		declination=A[1].data['DEC']
-		right_ancention=A[1].data['RA']
+	declination=A[1].data['DEC']
+	right_ancention=A[1].data['RA']
 
-		for i in range(0,len(declination)):
+	for i in range(0,len(declination)):
 				
-			dec=(declination[i])*u.deg
-			ra=(right_ancention[i])*u.deg
-			stars = SkyCoord(ra, dec, frame='icrs')
+		dec=(declination[i])*u.deg
+		ra=(right_ancention[i])*u.deg
+		stars = SkyCoord(ra, dec, frame='icrs')
 	
-			#Converts Ra,Dec to Alt,Az
-			stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
-			sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
+		#Converts Ra,Dec to Alt,Az
+		stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
+		sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
 	
-			Alt.append(sky_coords[0])
-			Az.append(sky_coords[1])
+		Alt.append(sky_coords[0])
+		Az.append(sky_coords[1])
 			
 	Alt_window=[min(Alt),max(Alt)]
 	Az_window=[min(Az),max(Az)]
 
 	
 	return Alt_window, Az_window
-			
-	
-def SatellitePosition(config,DayDirectory,FIT_Files):
+
+		
+def SatellitePosition(config,DayDirectory,FileXY,FIT_Files):
 	'''
 	SatellitePosition() loads the satellites information from the TLEs saved in the .json file from the ReadTLES(Links) function, 
 	and calculates their position in a given time and location.
 	'''
 	
-	
 	tle_list=TLE_parameters('Full Catalog-20230228T0000.json')
 	
 	ts = load.timescale()
 	
-	Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + FIT_Files[0]}", unit = 'adu') 
-	header=Data.header
-	info=SPADEFunctions.ReadFilesHeader(DayDirectory,header,FIT_Files[0])
-	t0 = ts.utc(info['Year'],info['Month'],info['Day'],info['Hour'],info['Minute'],info['Second'])
-	
-	Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + FIT_Files[-1]}", unit = 'adu') 
-	header=Data.header
-	info=SPADEFunctions.ReadFilesHeader(DayDirectory,header,FIT_Files[-1])
-	tf = ts.utc(info['Year'],info['Month'],info['Day'],info['Hour'],info['Minute'],info['Second'])
-	
-	Alt,Az=AltAz_window(DayDirectory,FIT_Files,FileXY,config)
-	Ra=[]
-	Dec=[]
 	satellites=[]
 	
-	for i in tle_list:
-			
-		items={}
-		line1=i['tle_1']
-		line2=i['tle_2']
-		nome=i['Satellite Number']
+	for num in range(0,len(FIT_Files)):
 	
-		satellite = EarthSatellite(line1, line2, nome, ts) # An Earth satellite loaded from a TLE file and propagated with SGP4. 
-
-		bluffton = wgs84.latlon(float(config['Latitude']), float(config['Longitude']),float(config['Height']))
+		image=FIT_Files[num]
+		Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + image}", unit = 'adu') 
+		header=Data.header
+		info=SPADEFunctions.ReadFilesHeader(DayDirectory,header,image)
+		t = ts.utc(info['Year'],info['Month'],info['Day'],info['Hour'],info['Minute'],info['Second'])
+	
+		Alt,Az=AltAz_window(DayDirectory,image,FileXY,config,info)
+		Ra=[]
+		Dec=[]
+	
+		for i in tle_list:
 			
-		difference = satellite - bluffton 
-		for t in np.arange(t0,tf,0.001):
+			items={}
+			line1=i['tle_1']
+			line2=i['tle_2']
+			nome=i['Satellite Number']
+	
+			satellite = EarthSatellite(line1, line2, nome, ts) # An Earth satellite loaded from a TLE file and propagated with SGP4. 
+
+			bluffton = wgs84.latlon(float(config['Latitude']), float(config['Longitude']),float(config['Height']))
+			
+			difference = satellite - bluffton 
+		
 			topocentric = difference.at(t)
-				
+				 
 			alt, az, distance = topocentric.altaz()
 			ra, dec, distance = topocentric.radec() 
 			
@@ -204,53 +234,21 @@ def SatellitePosition(config,DayDirectory,FIT_Files):
 				satellites.append(item)		
 				Ra.append(math.degrees(ra.radians))
 				Dec.append(math.degrees(dec.radians))
+			
+		FileName=f'Sat_RaDec_image{num+1}.rdls' 
+		CreateRDLSFile_RaDEC(Ra,Dec,FileName)
+		
+		FileWc=f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}.wcs'
+		FileOutput=f'{image.split(".")[0]}_radec'
+		SPADEFunctions.RaDecToXY(FileWc,FileName,FileOutput)
 				
-	return satellites,Ra,Dec
+
 	
-#satelites,Ra,Dec=SatellitePosition(config,DayDirectory,FIT_Files)
-#FileName='comparison_RaDec.rdls'
+#satellites=SatellitePosition(config,DayDirectory,FileXY,FIT_Files)
 
-def CreateRDLSFile_RaDEC(Ra,Dec,FileName):
-	''' 
-	Function that changes the data from the RLDS file to a set of (Ra,Dec) coordinates.
-	
-	INPUTS:
-	Ra 					-> array with Ra coordinates									(list)
-	Dec 				-> array with Dec coordinates									(list)
-	FileName 			-> Name of rdls file											(rdls)
-	
-	RETURNS:
-	NONE
-	
-	FILES CHANGED:
-	FileName			-> Changes Ra,Dec information to match with Ra,Dec given		(rdls)
-	
-	'''
-	with fits.open(FileName, mode = 'update') as A:
 
-		# Define the field names and types for X and Y separately
-		
-		X_fields = [('RA', '<f8')]
-		Y_fields = [('DEC','<f8')]
 
-		# Concatenate the field definitions
-		fields = X_fields + Y_fields
-
-		# Create the structured array using np.rec.fromarrays()
-		x = np.rec.fromarrays([Ra, Dec], dtype=fields)
-
-		A[1].data[A[1].data['RA'] > 180] #elimina os dados menores 2049
-		
-		A[1].data = np.array(x) # Convert the list of tuples to a NumPy array
-
-		A.close()
-
-#FileRaDec='comparison_RaDec.rdls'
-
-# for files in FIT_Files:
-	# FileWc=f'{DayDirectory}/AstrometryFiles/{files.split(".")[0]}.wcs'
-	# FileOutput=f'{files.split(".")[0]}_radec'
-	# SPADEFunctions.RaDecToXY(FileWc,FileRaDec,FileOutput)
+#CreateRDLSFile_RaDEC(Ra,Dec,FileName)
 	
 image='PAER_SURV_4_260789_230228_080700-051142_scan102_04.fit'
 		
@@ -278,16 +276,18 @@ def visualization_detections_and_satellites(DayDirectory,image):
 	
 	fig = plt.figure()
 	ax = fig.add_subplot(111) 
+	vmin,vmax = None,None
 
 
 	Imagem = CCDData.read(f"{DayDirectory  + '/ProcessedImages/' + image}", unit = 'adu') 
-	plt.imshow(Imagem,cmap='gray')
+	plt.imshow(Imagem,cmap='gray',vmin=vmin or np.nanpercentile(Imagem,3),vmax=vmax or np.nanpercentile(Imagem, 99))
+	#plt.imshow(Imagem,cmap='gray')
 	plt.title(f"{image.split('.')[0]}")
 
 
-	for i in jsonfile:
-		c1 = plt.Circle((float(i['Xdetect']),float(i['Ydetect'])), color = 'red', linewidth=2,fill=False)
-		ax.add_patch(c1)
+	#for i in jsonfile:
+	#	c1 = plt.Circle((float(i['Xdetect']),float(i['Ydetect'])), color = 'red', linewidth=2,fill=False)
+	#	ax.add_patch(c1)
 	
 	for i in range(0,len(x)):
 		c2 = plt.Circle((x[i],y[i]),4, color = 'blue', linewidth=2,fill=False)
