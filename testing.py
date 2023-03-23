@@ -241,11 +241,12 @@ def SatellitePosition(config,DayDirectory,FileXY,FIT_Files):
 		FileWc=f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}.wcs'
 		FileOutput=f'{image.split(".")[0]}_radec'
 		SPADEFunctions.RaDecToXY(FileWc,FileName,FileOutput)
+	return satellites
 				
 
 	
-#satellites=SatellitePosition(config,DayDirectory,FileXY,FIT_Files)
-
+satellites=SatellitePosition(config,DayDirectory,FileXY,FIT_Files)
+print(satellites)
 
 
 #CreateRDLSFile_RaDEC(Ra,Dec,FileName)
@@ -298,4 +299,4 @@ def visualization_detections_and_satellites(DayDirectory,image):
 	return True
 
 
-visualization_detections_and_satellites(DayDirectory,image)
+#visualization_detections_and_satellites(DayDirectory,image)
