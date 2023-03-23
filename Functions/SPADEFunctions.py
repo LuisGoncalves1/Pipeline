@@ -1155,7 +1155,6 @@ def ReadFilesHeader(DayDirectory,header,File):
 	None
 	'''
 	
-	data=[]
 	Header_information={}
 
 	Header_information['Image'] =File[-2]+File[-1] #Stores the last two strings of file name, that is associated to the image number, so you know to which image the header information is associated to.
@@ -1203,15 +1202,15 @@ def ReadFilesHeader(DayDirectory,header,File):
 			
 		Header_information['Second']=int(second-60) 
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-		data.append(Header_information)
+	
 	else:
 		Header_information['Minute']=minute
 		Header_information['Second']=int(second)
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-		data.append(Header_information)
+	
 		
 
-	return data
+	return Header_information
 	
 def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
 	 
@@ -1250,7 +1249,7 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 	header_data=ReadFilesHeader(DayDirectory,header,File)
 	#The algoritm only continues when the image of which the header information is associated to is the same as the image of current Base
 	
-	time = datetime.datetime(header_data[0]['Year'],header_data[0]['Month'],header_data[0]['Day'],header_data[0]['Hour'],header_data[0]['Minute'],header_data[0]['Second'],header_data[0]['Microsecond'])
+	time = datetime.datetime(header_data['Year'],header_data['Month'],header_data['Day'],header_data['Hour'],header_data['Minute'],header_data['Second'],header_data['Microsecond'])
 
 	for i in range(len(Detections)):
 			
