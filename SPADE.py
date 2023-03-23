@@ -75,7 +75,7 @@ Masters = SPADEFunctions.SeeMasters(DayDirectory)
 
 
 
-threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 1)
+threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 8)
 A = time.time()
 while True:
 	# Enquanto n tem imagens

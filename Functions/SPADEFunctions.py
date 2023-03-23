@@ -2143,12 +2143,12 @@ def SeeVariation(dic_unicas,max_sep):
 	Number1,Ra1,Dec1 = dic_unicas[1]['Number'],  dic_unicas[1]['Ra'],  dic_unicas[1]['Dec']
 	for i in range(len(Number1)):
 		objects[i] = {}
+		objects[i]['image'] = [1]
+		objects[i]['Number'] = [Number1[i]]
 		objects[i]['Ra'] = [Ra1[i]]
 		objects[i]['Dec'] = [Dec1[i]]
-		objects[i]['Number'] = [Number1[i]]
-
+		
 	for image in range(len(dic_unicas)-1):
-		print(image)
 		Number2,Ra2,Dec2 = dic_unicas[image+2]['Number'],dic_unicas[image+2]['Ra'],dic_unicas[image+2]['Dec']
 			
 		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
@@ -2159,15 +2159,32 @@ def SeeVariation(dic_unicas,max_sep):
 			
 		for count,found in enumerate(mask):
 			if found:
-				objects[count]['Number'].append(Number2[count])
-				objects[count]['Ra'].append(Ra2[count])
-				objects[count]['Dec'].append(Dec2[count])
+				if image+2 in objects[idx[count]]['image']:
+					nnew = len(objects)
+					objects[nnew] = {}
+					objects[nnew]['image']  =  objects[idx[count]]['image'][:-1]
+					objects[nnew]['Number'] =  objects[idx[count]]['Number'][:-1]
+					objects[nnew]['Ra']     =  objects[idx[count]]['Ra'][:-1]
+					objects[nnew]['Dec']    =  objects[idx[count]]['Dec'][:-1]
+					
+					objects[nnew]['image'].append(image+2)
+					objects[nnew]['Number'].append(Number2[count])
+					objects[nnew]['Ra'].append(Ra2[count])
+					objects[nnew]['Dec'].append(Dec2[count])
+					
+				else:
+					objects[idx[count]]['image'].append(image+2)
+					objects[idx[count]]['Number'].append(Number2[count])
+					objects[idx[count]]['Ra'].append(Ra2[count])
+					objects[idx[count]]['Dec'].append(Dec2[count])
 			else:
 				nnew = len(objects)
 				objects[nnew] = {}
+				objects[nnew]['image'] =  [image+2]
+				objects[nnew]['Number'] = [Number2[count]]
 				objects[nnew]['Ra'] = [Ra2[count]]
 				objects[nnew]['Dec'] = [Dec2[count]]
-				objects[nnew]['Number'] = [Number2[count]]
+				
 			
 		Ra1  = []
 		Dec1 = []

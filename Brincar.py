@@ -22,7 +22,8 @@ import json
 PipelineDirectory = os.getcwd()
 day = "2022-03-20"
 DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
-
+color = ['blue','green','red','black']
+size = 10
 
 Images =	 ['PAER_SURV_4_260789_230228_080700-051142_scan102_01.fit','PAER_SURV_4_260789_230228_080700-051142_scan102_02.fit','PAER_SURV_4_260789_230228_080700-051142_scan102_03.fit','PAER_SURV_4_260789_230228_080700-051142_scan102_04.fit']
 # ~ Images = ['PAER_SURV_4_260795_230228_080700+022452_scan102_01.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_02.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_03.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_04.fit']
@@ -30,18 +31,33 @@ Images =	 ['PAER_SURV_4_260789_230228_080700-051142_scan102_01.fit','PAER_SURV_4
 # ~ Images = ['PAER_SURV_4_260795_230228_080700+022452_scan102_01.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_02.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_03.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_04.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_04.fit']
 # ~ Images = ['PAER_SURV_4_260795_230228_080700+022452_scan102_01.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_02.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_03.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_04.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_01.fit']
 A = time.time()
-# ~ dic = SPADEFunctions.CompareImagesJsonSkyCoord(DayDirectory,Images,scale = 4.7)
 dic = SPADEFunctions.CompareImagesJsonSkyCoord2(DayDirectory,Images,scale = 4.7)
 dic_unicas = SPADEFunctions.MakeDicUnique(dic)
-objetos = SPADEFunctions.SeeVariation(dic_unicas,np.radians(100/3600))
-
-# ~ print(objetos)
-print('---------------------')
+objetos = SPADEFunctions.SeeVariation(dic_unicas,np.radians(130/3600))
 objetos = SPADEFunctions.CleanObjects(objetos)
+
+
+
+
+fig,axes = plt.subplots(1,2)
+ax = axes.ravel()
+vmin,vmax = None,None
+Data = CCDData.read(f"{DayDirectory}/ReducedImages/{Images[0]}", unit = 'adu')
+raw = Data.data
+ax[1].imshow(raw,cmap='gray',vmin=vmin or np.nanpercentile(raw,1),vmax=vmax or np.nanpercentile(raw, 99))
+
 print(objetos)
 
+for obj in objetos:
+	for Number in objetos[obj]['Number']:
+		data1 = dic[Number]
+		print(data1)
+		image,X,Y = int(data1['image'][0])-1, data1['Xdetect'][0], data1['Ydetect'][0]
+		c1 = plt.Circle((X,Y),size, color = color[image], linewidth=1,fill=False)
+		ax[1].add_patch(c1)
 
-time.sleep(500)
+plt.show()
+
 unicas = []
 for i,key in enumerate(dic):
 	if len(dic[key]['image']) == 1:
@@ -51,7 +67,6 @@ for i,key in enumerate(dic):
 fig,axes = plt.subplots(2,3)
 ax = axes.ravel()
 vmin,vmax = None,None
-size = 15
 fig.suptitle(f'Metodo 2:{Images[0]}')
 for i in range(len(Images)):
 		Image = Images[i]
@@ -62,7 +77,6 @@ for i in range(len(Images)):
 ax[4].imshow(raw,cmap='gray',vmin=vmin or np.nanpercentile(raw,1),vmax=vmax or np.nanpercentile(raw, 99))
 ax[5].imshow(raw,cmap='gray',vmin=vmin or np.nanpercentile(raw,1),vmax=vmax or np.nanpercentile(raw, 99))
 
-color = ['blue','green','red','black']
 for i in range(len(unicas)):
 	obj = dic[unicas[i]]
 	image,X,Y,FWHM = int(obj['image'][0])-1, obj['Xdetect'][0], obj['Ydetect'][0], obj['FWHM'][0]	
