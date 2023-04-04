@@ -1155,6 +1155,7 @@ def ReadFilesHeader(DayDirectory,header,File):
 	None
 	'''
 	
+	data=[]
 	Header_information={}
 
 	Header_information['Image'] =File[-2]+File[-1] #Stores the last two strings of file name, that is associated to the image number, so you know to which image the header information is associated to.
@@ -1202,15 +1203,15 @@ def ReadFilesHeader(DayDirectory,header,File):
 			
 		Header_information['Second']=int(second-60) 
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-	
+		data.append(Header_information)
 	else:
 		Header_information['Minute']=minute
 		Header_information['Second']=int(second)
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-	
+		data.append(Header_information)
 		
 
-	return Header_information
+	return data
 	
 def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
 	 
@@ -1249,7 +1250,7 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 	header_data=ReadFilesHeader(DayDirectory,header,File)
 	#The algoritm only continues when the image of which the header information is associated to is the same as the image of current Base
 	
-	time = datetime.datetime(header_data['Year'],header_data['Month'],header_data['Day'],header_data['Hour'],header_data['Minute'],header_data['Second'],header_data['Microsecond'])
+	time = datetime.datetime(header_data[0]['Year'],header_data[0]['Month'],header_data[0]['Day'],header_data[0]['Hour'],header_data[0]['Minute'],header_data[0]['Second'],header_data[0]['Microsecond'])
 
 	for i in range(len(Detections)):
 			
@@ -1263,13 +1264,13 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 			items['SNR']= float(SNR[i])
 			items['RaCalculated'] = float(Detections.ra[i].value)
 			items['DecCalculated'] = float( Detections.dec[i].value)
-			items['MagInst '] = str(DetectionsMags[i])
+			items['MagInst '] = float(DetectionsMags[i])
 			items['Match']= int(Match)
 			
 			if Match:
-				items['RaCatalogue'] = str(Catalogue.ra[i].value)
-				items['DecCatalogue'] = str(Catalogue.dec[i].value)
-				items['MagReal'] =str(CatalogueMags[i])
+				items['RaCatalogue'] = float(Catalogue.ra[i].value)
+				items['DecCatalogue'] = float(Catalogue.dec[i].value)
+				items['MagReal'] =float(CatalogueMags[i])
 				
 			if not Match:
 				items['MagReal'] ='0'
@@ -1283,8 +1284,8 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 			stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
 			sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
 
-			items['Alt']=str(sky_coords[0])
-			items['Az']=str(sky_coords[1])
+			items['Alt']=float(sky_coords[0])
+			items['Az']=float(sky_coords[1])
 
 			items_2_store.append(items)
 			
@@ -1477,8 +1478,10 @@ def astrometry(DirCatalogo,header,DirAstro,config):
            '--radius', config['radius'],			# Radius of the image in degrees (in the diagonal of the image)
            '--overwrite',							# Overwrite if there is already a file with the same name
            '--dir', DirAstro,						# Output directory
+           '--out', DirCatalogo.split('/')[-1][:-16],
             DirCatalogo
     ]
+	print(DirCatalogo.split('/')[-1][:-16])
     # log cmd executed
 	cmd_str = ' '.join(cmd) 						  # Compacts the cmd dictionary created so it can be run through terminal
 	
@@ -1679,14 +1682,14 @@ def CosmicRayCorrection(File,Data,logging):
 ###########################################################
 # Drawings
 
-def ImagePlot(Images):		
+def ImagePlotTxt(DayDirectory,Images):		
 	for i in range(len(Images)):
 		Image = Images[i]
-		Data = CCDData.read(f"{DayDirectory}/ReducedImages/{Image}.fit", unit = 'adu')
+		Data = CCDData.read(f"{DayDirectory}/ReducedImages/{Image}", unit = 'adu')
 		raw = Data.data
 		
-		OutputFile = f"{DayDirectory}/OutputFiles/{Image}"
-		Dados = SPADEFunctions.ReadOutput(OutputFile)
+		OutputFile = f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}"
+		Dados = ReadOutput_Txt(OutputFile)
 		X,Y,found = Dados['X'],Dados['Y'],Dados['Match']
 		
 		fig,axes = plt.subplots(2,2)
@@ -1845,6 +1848,8 @@ def SextractorPart(File,PipelineDirectory,DayDirectory,config):
 	#Lastly, Sextractor is run again with the PSF model, in order to improve photometry
 	logging.info("Finished Sextractor Pass of " + File)
 	resultado = sextractor(Base,PipelineDirectory,DayDirectory,config['SexConfig'],3)
+	
+	return resultado
 
 def AstrometryPart(File,PipelineDirectory,DayDirectory,config,header):
 	'''
@@ -1870,15 +1875,31 @@ def AstrometryPart(File,PipelineDirectory,DayDirectory,config,header):
 	'''
 	logging.info("Started Astrometry Pass of image " + File)
 	Base = File.split('.')[0]
-	result,status = astrometry(DayDirectory + '/SextractorCatalogue/' + Base + '.cat',header,DayDirectory + '/AstrometryFiles',config) 
-
-	# ~ #Transforms from XY to RaDec with WCS information from astrometry
 	FileWc = f"{DayDirectory}/AstrometryFiles/{Base}.wcs"															# Gets directory : WCS file created from astrometry 
 	FileXY = f"{DayDirectory}/SextractorCatalogue/{Base}.cat"														# Gets directory : catalogue created from sextractor
-	FileOutput = f"{DayDirectory}/AstrometryFiles/{Base}"																# Output file for calculation of RaDec coordinate of all stars
-	result, status	= XYToRaDec(FileWc,FileXY,FileOutput)																# Calculates RaDec positions for all stars obtained from sextractor
-	logging.info("Finished Astrometry Pass of image " + File)
+	FileOutput = f"{DayDirectory}/AstrometryFiles/{Base}"															# Output file for calculation of RaDec coordinate of all stars
+	FileXYBright = f"{DayDirectory}/SextractorCatalogue/{Base}_cat_bright.fits"										# Output file for calculation of RaDec coordinate of all stars
 
+    # select the brightest objects
+	Nbright = int(config['NSources'])
+	BrightParameter = config['BrightParameter']
+	data_sexcat =  fits.open(FileXY)[1].data
+	index = np.argsort(data_sexcat[BrightParameter])
+    
+	if Nbright > 0:
+		data_sexcat = data_sexcat[index][:Nbright]
+	else:
+		data_sexcat = data_sexcat[index][-Nbright:]
+	fits.writeto(FileXYBright, data_sexcat,overwrite=True)
+	result,status = astrometry(FileXYBright,header,DayDirectory + '/AstrometryFiles',config) 
+
+	# ~ #Transforms from XY to RaDec with WCS information from astrometry
+	
+	result2, status2	= XYToRaDec(FileWc,FileXY,FileOutput)																# Calculates RaDec positions for all stars obtained from sextractor
+	logging.info("Finished Astrometry Pass of image " + File)
+	
+	return result,status
+	
 def CatalogComparison(File,PipelineDirectory,DayDirectory,config,Filter):
 	'''
 	Function that compares image detections with the catalog.
@@ -1930,8 +1951,8 @@ def CatalogComparison(File,PipelineDirectory,DayDirectory,config,Filter):
 				
 def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	header = ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging)
-	SextractorPart(File,PipelineDirectory,DayDirectory,config)
-	AstrometryPart(File,PipelineDirectory,DayDirectory,config,header)
+	result = SextractorPart(File,PipelineDirectory,DayDirectory,config)
+	result,status = AstrometryPart(File,PipelineDirectory,DayDirectory,config,header)
 	X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = CatalogComparison(File,PipelineDirectory,DayDirectory,config,header['FILTER'])
 	# ~ WriteOutput_Txt(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
 	WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
@@ -1964,113 +1985,7 @@ def FindMatchJson(obj,ImageData,scale):
 	
 	return False
 			
-def CompareImagesJson(DayDirectory,Images,scale):
-	''' 
-	Function compares Json files to identify unique detections from each image. Slow and bad, use CompareImagesSkyCoord2
-	
-	INPUTS:
-	DayDirectory 		-> Directory of present day											(str)
-	Images		 		-> JsonFiles corresponding to detections		 			 		(list)
-	scale 				-> pixel scale used for comparison						 			(float)
-	
-	RETURNS: 
-	dic					-> dictionary with all unique sources and information for each		(CCDData)
-	
-	FILES CREATED:
-	NONE
-	''' 
-	if len(Images) == 1:
-		raise Exception('Not enough images to compare!')
-	dic = {}
-	Image = Images[0]
-	with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
-		ImageData = json.load(stream)
-	for count,obj in enumerate(ImageData):
-		dic[count] = {}
-		for i,key in enumerate(obj):
-			dic[count][key] = []
-			dic[count][key].append(float(obj[key]))
-	
-	for count, Image in enumerate(Images[1:]):
-		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
-			ImageData = json.load(stream)
-		for obj in ImageData:
-			Point = FindMatchJson(obj,dic,scale) # Devolve False ou chave do match
-			if not Point:
-				dic[len(dic)] = {}
-				for i,key in enumerate(obj):
-					dic[len(dic)-1][key] = []
-					dic[len(dic)-1][key].append(float(obj[key]))
-			else:
-				for count2, key in enumerate(list(dic[Point].keys())):
-					if (key in dic[Point]) & (key in obj):
-						dic[Point][key].append(float(obj[key]))
-	return dic
-
 def CompareImagesJsonSkyCoord(DayDirectory,Images,scale):
-	''' 
-	Function compares Json files to identify unique detections from each image using SkyCoord. Has a error that I don't know what.
-	
-	INPUTS:
-	DayDirectory 		-> Directory of present day											(str)
-	Images		 		-> JsonFiles corresponding to detections		 			 		(list)
-	scale 				-> pixel scale used for comparison						 			(float)
-	
-	RETURNS: 
-	dic					-> dictionary with all unique sources and information for each		(CCDData)
-	
-	FILES CREATED:
-	NONE
-	''' 
-	
-	if len(Images) == 1:
-		raise Exception('Not enough images to compare!')
-	dic = {}
-	Image = Images[0]
-	Ra1 = []
-	Dec1 = []
-	with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
-		ImageData = json.load(stream)
-	for count,obj in enumerate(ImageData):
-		dic[count] = {}
-		Ra1.append(obj['RaCalculated'])
-		Dec1.append(obj['DecCalculated'])  	
-		for i,key in enumerate(obj):
-			dic[count][key] = []
-			dic[count][key].append(float(obj[key]))
-	
-	for count, Image in enumerate(Images[1:]):
-		RaN = []
-		DecN = []
-		FWHM = []
-		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
-			ImageData = json.load(stream)
-		for obj in ImageData:
-			RaN.append(obj['RaCalculated'])
-			DecN.append(obj['DecCalculated'])
-			FWHM.append(obj['FWHM'])
-			
-		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Sources of all previous images
-		DetectionsN = SkyCoord(ra = Longitude(RaN, unit = u.deg), dec = np.array(DecN)*u.deg, frame = 'cirs')  		# Sources of image N
-		idx, d2d, d3d = match_coordinates_sky(Detections1, DetectionsN,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
-		mask = d3d < np.radians(scale*np.median(FWHM)/3600)
-		for i,found in enumerate(mask):
-			obj = ImageData[idx[i]]
-			if found:
-				for key in list(dic[i].keys()):
-					if key in obj:
-						dic[i][key].append(float(obj[key]))
-				
-			else:
-				Ra1.append(obj['RaCalculated'])
-				Dec1.append(obj['DecCalculated'])
-				dic[len(dic)] = {}
-				for j,key in enumerate(obj):
-					dic[len(dic)-1][key] = []
-					dic[len(dic)-1][key].append(float(obj[key]))
-	return dic
-
-def CompareImagesJsonSkyCoord2(DayDirectory,Images,scale):
 	''' 
 	Function compares Json files to identify unique detections from each image with SkyCoord. Best version to use.
 	
@@ -2140,50 +2055,71 @@ def SeeVariation(dic_unicas,max_sep):
 	
 	'''
 	objects = {}
-	Number1,Ra1,Dec1 = dic_unicas[1]['Number'],  dic_unicas[1]['Ra'],  dic_unicas[1]['Dec']
+	Number1,Ra1,Dec1,X1,Y1,FWHM1 = dic_unicas[1]['Number'],  dic_unicas[1]['Ra'],  dic_unicas[1]['Dec'],	dic_unicas[1]['X'],	dic_unicas[1]['Y'], dic_unicas[1]['FWHM']
 	for i in range(len(Number1)):
 		objects[i] = {}
 		objects[i]['image'] = [1]
 		objects[i]['Number'] = [Number1[i]]
 		objects[i]['Ra'] = [Ra1[i]]
 		objects[i]['Dec'] = [Dec1[i]]
+		objects[i]['X'] = [X1[i]]
+		objects[i]['Y'] = [Y1[i]]
+		objects[i]['FWHM'] = [FWHM1[i]]
 		
 	for image in range(len(dic_unicas)-1):
-		Number2,Ra2,Dec2 = dic_unicas[image+2]['Number'],dic_unicas[image+2]['Ra'],dic_unicas[image+2]['Dec']
+		Number2,Ra2,Dec2,X2,Y2,FWHM2 = dic_unicas[image+2]['Number'],dic_unicas[image+2]['Ra'],dic_unicas[image+2]['Dec'],dic_unicas[image+2]['X'],dic_unicas[image+2]['Y'],dic_unicas[image+2]['FWHM']
 			
 		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
 		Detections2 = SkyCoord(ra = Longitude(Ra2, unit = u.deg), dec = np.array(Dec2)*u.deg, frame = 'cirs')  		# Sources of image N+1
-			
-		idx, d2d, d3d = match_coordinates_sky(Detections2, Detections1,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
-		mask = d3d < max_sep
-			
-		for count,found in enumerate(mask):
-			if found:
-				if image+2 in objects[idx[count]]['image']:
+		
+		n = 1
+		while True:
+			idx, d2d, d3d = match_coordinates_sky(Detections2, Detections1,nthneighbor=n,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
+			mask = d3d < max_sep
+			n+=1
+			if sum(mask) == 0:
+				break
+				
+			for count,found in enumerate(mask):
+				if found:
+					if image+2 in objects[idx[count]]['image']:
+						nnew = len(objects)
+						objects[nnew] = {}
+						objects[nnew]['image']  =  objects[idx[count]]['image'][:-1]
+						objects[nnew]['Number'] =  objects[idx[count]]['Number'][:-1]
+						objects[nnew]['Ra']     =  objects[idx[count]]['Ra'][:-1]
+						objects[nnew]['Dec']    =  objects[idx[count]]['Dec'][:-1]
+						objects[nnew]['X']   	=  objects[idx[count]]['X'][:-1]
+						objects[nnew]['Y']    	=  objects[idx[count]]['Y'][:-1]
+						objects[nnew]['FWHM']  	=  objects[idx[count]]['FWHM'][:-1]
+						
+						objects[nnew]['image'].append(image+2)
+						objects[nnew]['Number'].append(Number2[count])
+						objects[nnew]['Ra'].append(Ra2[count])
+						objects[nnew]['Dec'].append(Dec2[count])
+						objects[nnew]['X'].append(X2[count])
+						objects[nnew]['Y'].append(Y2[count])
+						objects[nnew]['FWHM'].append(FWHM2[count])
+						
+					else:
+						objects[idx[count]]['image'].append(image+2)
+						objects[idx[count]]['Number'].append(Number2[count])
+						objects[idx[count]]['Ra'].append(Ra2[count])
+						objects[idx[count]]['Dec'].append(Dec2[count])
+						objects[idx[count]]['X'].append(X2[count])
+						objects[idx[count]]['Y'].append(Y2[count])
+						objects[idx[count]]['FWHM'].append(FWHM2[count])
+						
+				else:
 					nnew = len(objects)
 					objects[nnew] = {}
-					objects[nnew]['image']  =  objects[idx[count]]['image'][:-1]
-					objects[nnew]['Number'] =  objects[idx[count]]['Number'][:-1]
-					objects[nnew]['Ra']     =  objects[idx[count]]['Ra'][:-1]
-					objects[nnew]['Dec']    =  objects[idx[count]]['Dec'][:-1]
-					
-					objects[nnew]['image'].append(image+2)
-					objects[nnew]['Number'].append(Number2[count])
-					objects[nnew]['Ra'].append(Ra2[count])
-					objects[nnew]['Dec'].append(Dec2[count])
-					
-				else:
-					objects[idx[count]]['image'].append(image+2)
-					objects[idx[count]]['Number'].append(Number2[count])
-					objects[idx[count]]['Ra'].append(Ra2[count])
-					objects[idx[count]]['Dec'].append(Dec2[count])
-			else:
-				nnew = len(objects)
-				objects[nnew] = {}
-				objects[nnew]['image'] =  [image+2]
-				objects[nnew]['Number'] = [Number2[count]]
-				objects[nnew]['Ra'] = [Ra2[count]]
-				objects[nnew]['Dec'] = [Dec2[count]]
+					objects[nnew]['image'] 		= [image+2]
+					objects[nnew]['Number'] 	= [Number2[count]]
+					objects[nnew]['Ra'] 		= [Ra2[count]]
+					objects[nnew]['Dec']		= [Dec2[count]]
+					objects[nnew]['X'] 			= [X2[count]]
+					objects[nnew]['Y'] 			= [Y2[count]]
+					objects[nnew]['FWHM']		= [FWHM2[count]]
 				
 			
 		Ra1  = []
@@ -2201,21 +2137,72 @@ def MakeDicUnique(dic):
 			n_image = int(dic[key]['image'][0])
 			
 			if n_image in dic_unicas:
+				dic_unicas[n_image]['image'].append(n_image)
 				dic_unicas[n_image]['Number'].append(key)
 				dic_unicas[n_image]['Ra'].append(dic[key]['RaCalculated'][0])
 				dic_unicas[n_image]['Dec'].append(dic[key]['DecCalculated'][0])
+				dic_unicas[n_image]['X'].append(dic[key]['Xdetect'][0])
+				dic_unicas[n_image]['Y'].append(dic[key]['Ydetect'][0])
+				dic_unicas[n_image]['FWHM'].append(dic[key]['FWHM'][0])
+				
 			else:
 				dic_unicas[n_image] = {}
+				dic_unicas[n_image]['image'] = [n_image]
 				dic_unicas[n_image]['Number'] = [key]
 				dic_unicas[n_image]['Ra'] = dic[key]['RaCalculated']
 				dic_unicas[n_image]['Dec'] = dic[key]['DecCalculated']
+				dic_unicas[n_image]['X'] = dic[key]['Xdetect']
+				dic_unicas[n_image]['Y'] = dic[key]['Ydetect']
+				dic_unicas[n_image]['FWHM'] = dic[key]['FWHM']
 	return dic_unicas
 	
-def CleanObjects(Objects):
-	for obj in range(len(Objects)):
+def CleanObjects(Objects,config):
+	'''
+	Cleans Object dic to only output true movement of objects
+	
+	INPUTS:
+	Objects			-> Dictionary with information about sets of objects   			(dict)
+	
+	OUTPUTS:
+	Objects			-> Clean Dictionary with information about sets of objects  	(dict)
+	
+	'''
+	
+	for obj in list(Objects.keys()):
+		# STEP1: Removes objects with less than 3 detections
 		if len(Objects[obj]['Ra']) < 3:
 			del Objects[obj]
-	
+			continue
+		
+		
+		
+		d,dV = [],[] 
+		for j in range(len(Objects[obj]['image'])-1):
+			image1,image2 = Objects[obj]['image'][j],Objects[obj]['image'][j+1]
+			X1,X2 = Objects[obj]['X'][j],Objects[obj]['X'][j+1]
+			Y1,Y2 = Objects[obj]['Y'][j],Objects[obj]['Y'][j+1]
+			d.append(np.sqrt((X2-X1)**2 + (Y2-Y1)**2)/(image2-image1))
+			dV.append(np.arctan2(Y2-Y1,X2-X1))
+			
+		# STEP2: Removes sets with varying distance between consecutive points	
+		if config['CheckDistance']:	
+			if abs((max(d)-min(d))/max(d)) > float(config['percent_distance']):
+				del Objects[obj]
+				continue
+		#STEP3: Removes sets with varying direction
+		if config['CheckDirection']:	
+			if abs(max(dV)-min(dV)) > np.radians(float(config['angle_difference'])):
+				del Objects[obj]
+				continue
+		print('----------------')
+		print('X: ',X1)
+		print('Y: ',Y1)
+		print('FWHM: ',Objects[obj]['FWHM'][j])
+		print(d)
+		print(abs((max(d)-min(d))/max(d)))
+		print(np.degrees(dV))
+		print(np.degrees(abs(max(dV)-min(dV))))
+			
 	return Objects
 	
 	
@@ -2251,3 +2238,267 @@ def CompareImagesTXT(Images):
 					dic[obj][key] = dic[obj][key].append(Valor[key])
 			else:
 				dic[len(dic)] = Valor
+
+def ldac2fits (cat_ldac, cat_fits):
+
+    """This function converts the LDAC binary FITS table from SExtractor
+    to a common binary FITS table (that can be read by Astrometry.net) """
+
+    # read input table and write out primary header and 2nd extension
+    columns = []
+    with fits.open(cat_ldac, memmap=True) as hdulist:
+
+        # delete VIGNET column
+        hdulist[2].data = drop_fields(hdulist[2].data, 'VIGNET')
+
+        # and write regular fits file
+        hdulist_new = fits.HDUList([hdulist[0], hdulist[2]])
+        hdulist_new.writeto(cat_fits, overwrite=True)
+        hdulist_new.close()
+
+    return
+    
+
+
+# Old Functions
+
+def SeeVariationOld(dic_unicas,max_sep):
+	'''
+	Number -> number of object in dic
+	
+	
+	
+	'''
+	objects = {}
+	Number1,Ra1,Dec1,X1,Y1 = dic_unicas[1]['Number'],  dic_unicas[1]['Ra'],  dic_unicas[1]['Dec'],	dic_unicas[1]['X'],	dic_unicas[1]['Y']
+	for i in range(len(Number1)):
+		objects[i] = {}
+		objects[i]['image'] = [1]
+		objects[i]['Number'] = [Number1[i]]
+		objects[i]['Ra'] = [Ra1[i]]
+		objects[i]['Dec'] = [Dec1[i]]
+		objects[i]['X'] = [X1[i]]
+		objects[i]['Y'] = [Y1[i]]
+		
+	for image in range(len(dic_unicas)-1):
+		Number2,Ra2,Dec2,X2,Y2 = dic_unicas[image+2]['Number'],dic_unicas[image+2]['Ra'],dic_unicas[image+2]['Dec'],dic_unicas[image+2]['X'],dic_unicas[image+2]['Y']
+			
+		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
+		Detections2 = SkyCoord(ra = Longitude(Ra2, unit = u.deg), dec = np.array(Dec2)*u.deg, frame = 'cirs')  		# Sources of image N+1
+			
+		idx, d2d, d3d = match_coordinates_sky(Detections2, Detections1,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
+		mask = d3d < max_sep
+			
+		for count,found in enumerate(mask):
+			if found:
+				if image+2 in objects[idx[count]]['image']:
+					nnew = len(objects)
+					objects[nnew] = {}
+					objects[nnew]['image']  =  objects[idx[count]]['image'][:-1]
+					objects[nnew]['Number'] =  objects[idx[count]]['Number'][:-1]
+					objects[nnew]['Ra']     =  objects[idx[count]]['Ra'][:-1]
+					objects[nnew]['Dec']    =  objects[idx[count]]['Dec'][:-1]
+					objects[nnew]['X']   	=  objects[idx[count]]['X'][:-1]
+					objects[nnew]['Y']    	=  objects[idx[count]]['Y'][:-1]
+					
+					objects[nnew]['image'].append(image+2)
+					objects[nnew]['Number'].append(Number2[count])
+					objects[nnew]['Ra'].append(Ra2[count])
+					objects[nnew]['Dec'].append(Dec2[count])
+					objects[nnew]['X'].append(X2[count])
+					objects[nnew]['Y'].append(Y2[count])
+					
+				else:
+					objects[idx[count]]['image'].append(image+2)
+					objects[idx[count]]['Number'].append(Number2[count])
+					objects[idx[count]]['Ra'].append(Ra2[count])
+					objects[idx[count]]['Dec'].append(Dec2[count])
+					objects[idx[count]]['X'].append(X2[count])
+					objects[idx[count]]['Y'].append(Y2[count])
+					
+			else:
+				nnew = len(objects)
+				objects[nnew] = {}
+				objects[nnew]['image'] 		= [image+2]
+				objects[nnew]['Number'] 	= [Number2[count]]
+				objects[nnew]['Ra'] 		= [Ra2[count]]
+				objects[nnew]['Dec']		= [Dec2[count]]
+				objects[nnew]['X'] 			= [X2[count]]
+				objects[nnew]['Y'] 			= [Y2[count]]
+				
+			
+		Ra1  = []
+		Dec1 = []
+		for i in range(len(objects)):
+			Ra1.append(objects[i]['Ra'][-1])
+			Dec1.append(objects[i]['Dec'][-1])
+	
+	return objects
+
+def CleanObjectsOld(Objects,config):
+	'''
+	Cleans Object dic to only output true movement of objects
+	
+	INPUTS:
+	Objects			-> Dictionary with information about sets of objects   			(dict)
+	
+	OUTPUTS:
+	Objects			-> Clean Dictionary with information about sets of objects  	(dict)
+	
+	'''
+	
+	for obj in list(Objects.keys()):
+		# STEP1: Removes objects with less than 3 detections
+		if len(Objects[obj]['Ra']) < 3:
+			del Objects[obj]
+			continue
+		
+		# STEP2: Removes sets with varying distance between consecutive points
+		if config['CheckDistance']:
+			d = [] 
+			for j in range(len(Objects[obj]['image'])-1):
+				image1,image2 = Objects[obj]['image'][j],Objects[obj]['image'][j+1]
+				Ra1,Ra2 = Objects[obj]['Ra'][j],Objects[obj]['Ra'][j+1]
+				Dec1,Dec2 = Objects[obj]['Dec'][j],Objects[obj]['Dec'][j+1]
+				
+				distance = AngleDifferencePoints([Ra1,Dec1],[Ra2,Dec2])
+				distance = distance/(image2-image1)
+				d.append(distance)
+				
+				
+			if abs((max(d)-min(d))/max(d)) > float(config['percent_distance']):
+				del Objects[obj]
+				continue
+					
+		# STEP3: Removes sets with varying direction
+		if config['CheckDirection']:
+			dX,dY,dV = [],[],[]
+			for j in range(len(Objects[obj]['image'])-1):
+				image1,image2 = Objects[obj]['image'][j],Objects[obj]['image'][j+1]
+				X1,X2 = Objects[obj]['X'][j],Objects[obj]['X'][j+1]
+				Y1,Y2 = Objects[obj]['Y'][j],Objects[obj]['Y'][j+1]
+				
+
+				dX.append((X2-X1)/(image2-image1))
+				dY.append((Y2-Y1)/(image2-image1))
+				dV.append(np.arctan(dY[-1]/dX[-1]))
+			if abs(max(dV)-min(dV)) > np.radians(float(config['angle_difference'])):
+				del Objects[obj]
+				continue
+			else:
+				print('----------------')
+				print('X: ',X1)
+				print('Y: ',Y1)
+				print('FWHM: ',Objects[obj]['FWHM'][j])
+				print(dV)
+				print(abs(max(dV)-min(dV)))
+			
+	return Objects
+	
+def CompareImagesJson(DayDirectory,Images,scale):
+	''' 
+	Function compares Json files to identify unique detections from each image. Slow and bad, use CompareImagesSkyCoord2
+	
+	INPUTS:
+	DayDirectory 		-> Directory of present day											(str)
+	Images		 		-> JsonFiles corresponding to detections		 			 		(list)
+	scale 				-> pixel scale used for comparison						 			(float)
+	
+	RETURNS: 
+	dic					-> dictionary with all unique sources and information for each		(CCDData)
+	
+	FILES CREATED:
+	NONE
+	''' 
+	if len(Images) == 1:
+		raise Exception('Not enough images to compare!')
+	dic = {}
+	Image = Images[0]
+	with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+		ImageData = json.load(stream)
+	for count,obj in enumerate(ImageData):
+		dic[count] = {}
+		for i,key in enumerate(obj):
+			dic[count][key] = []
+			dic[count][key].append(float(obj[key]))
+	
+	for count, Image in enumerate(Images[1:]):
+		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+			ImageData = json.load(stream)
+		for obj in ImageData:
+			Point = FindMatchJson(obj,dic,scale) # Devolve False ou chave do match
+			if not Point:
+				dic[len(dic)] = {}
+				for i,key in enumerate(obj):
+					dic[len(dic)-1][key] = []
+					dic[len(dic)-1][key].append(float(obj[key]))
+			else:
+				for count2, key in enumerate(list(dic[Point].keys())):
+					if (key in dic[Point]) & (key in obj):
+						dic[Point][key].append(float(obj[key]))
+	return dic
+
+def CompareImagesJsonSkyCoordOld(DayDirectory,Images,scale):
+	''' 
+	Function compares Json files to identify unique detections from each image using SkyCoord. Has a error that I don't know what.
+	
+	INPUTS:
+	DayDirectory 		-> Directory of present day											(str)
+	Images		 		-> JsonFiles corresponding to detections		 			 		(list)
+	scale 				-> pixel scale used for comparison						 			(float)
+	
+	RETURNS: 
+	dic					-> dictionary with all unique sources and information for each		(CCDData)
+	
+	FILES CREATED:
+	NONE
+	''' 
+	
+	if len(Images) == 1:
+		raise Exception('Not enough images to compare!')
+	dic = {}
+	Image = Images[0]
+	Ra1 = []
+	Dec1 = []
+	with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+		ImageData = json.load(stream)
+	for count,obj in enumerate(ImageData):
+		dic[count] = {}
+		Ra1.append(obj['RaCalculated'])
+		Dec1.append(obj['DecCalculated'])  	
+		for i,key in enumerate(obj):
+			dic[count][key] = []
+			dic[count][key].append(float(obj[key]))
+	
+	for count, Image in enumerate(Images[1:]):
+		RaN = []
+		DecN = []
+		FWHM = []
+		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+			ImageData = json.load(stream)
+		for obj in ImageData:
+			RaN.append(obj['RaCalculated'])
+			DecN.append(obj['DecCalculated'])
+			FWHM.append(obj['FWHM'])
+			
+		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Sources of all previous images
+		DetectionsN = SkyCoord(ra = Longitude(RaN, unit = u.deg), dec = np.array(DecN)*u.deg, frame = 'cirs')  		# Sources of image N
+		idx, d2d, d3d = match_coordinates_sky(Detections1, DetectionsN,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
+		mask = d3d < np.radians(scale*np.median(FWHM)/3600)
+		for i,found in enumerate(mask):
+			obj = ImageData[idx[i]]
+			if found:
+				for key in list(dic[i].keys()):
+					if key in obj:
+						dic[i][key].append(float(obj[key]))
+				
+			else:
+				Ra1.append(obj['RaCalculated'])
+				Dec1.append(obj['DecCalculated'])
+				dic[len(dic)] = {}
+				for j,key in enumerate(obj):
+					dic[len(dic)-1][key] = []
+					dic[len(dic)-1][key].append(float(obj[key]))
+	return dic
+
+

@@ -17,26 +17,40 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy.coordinates import SkyCoord, Longitude,  Angle, match_coordinates_sky
 import json
-
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+import matplotlib.font_manager as fm
 
 PipelineDirectory = os.getcwd()
 day = "2022-03-20"
 DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
+config_file = 'ConfigurationDefesa.txt'
+config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
 color = ['blue','green','red','black']
 size = 10
 
-Images =	 ['PAER_SURV_4_260789_230228_080700-051142_scan102_01.fit','PAER_SURV_4_260789_230228_080700-051142_scan102_02.fit','PAER_SURV_4_260789_230228_080700-051142_scan102_03.fit','PAER_SURV_4_260789_230228_080700-051142_scan102_04.fit']
+# ~ Images = ['PAER_SURV_4_260789_230228_080700-051142_scan102_01.fit','PAER_SURV_4_260789_230228_080700-051142_scan102_02.fit','PAER_SURV_4_260789_230228_080700-051142_scan102_03.fit','PAER_SURV_4_260789_230228_080700-051142_scan102_04.fit']
 # ~ Images = ['PAER_SURV_4_260795_230228_080700+022452_scan102_01.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_02.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_03.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_04.fit']
+# ~ Images = ['PAER_SURV_4_260711_230228_042347-031345_scan014_01.fit','PAER_SURV_4_260711_230228_042347-031345_scan014_02.fit','PAER_SURV_4_260711_230228_042347-031345_scan014_03.fit','PAER_SURV_4_260711_230228_042347-031345_scan014_04.fit']
+# ~ Images = ['PAER_SURV_4_260717_230228_042347+065500_scan014_01.fit','PAER_SURV_4_260717_230228_042347+065500_scan014_02.fit','PAER_SURV_4_260717_230228_042347+065500_scan014_03.fit','PAER_SURV_4_260717_230228_042347+065500_scan014_04.fit']
+# ~ Images = ['PAER_SURV_4_260723_230228_042347-031345_scan015_01.fit','PAER_SURV_4_260723_230228_042347-031345_scan015_02.fit','PAER_SURV_4_260723_230228_042347-031345_scan015_03.fit','PAER_SURV_4_260723_230228_042347-031345_scan015_04.fit']
+# ~ Images = ['PAER_SURV_4_260729_230228_042347+065500_scan015_01.fit','PAER_SURV_4_260729_230228_042347+065500_scan015_02.fit','PAER_SURV_4_260729_230228_042347+065500_scan015_03.fit','PAER_SURV_4_260729_230228_042347+065500_scan015_04.fit']
+# ~ Images = ['PAER_SURV_4_260735_230228_042347-004133_scan016_01.fit','PAER_SURV_4_260735_230228_042347-004133_scan016_02.fit','PAER_SURV_4_260735_230228_042347-004133_scan016_03.fit','PAER_SURV_4_260735_230228_042347-004133_scan016_04.fit']
+# ~ Images = ['PAER_SURV_4_260741_230228_042347+065500_scan016_01.fit','PAER_SURV_4_260741_230228_042347+065500_scan016_02.fit','PAER_SURV_4_260741_230228_042347+065500_scan016_03.fit','PAER_SURV_4_260741_230228_042347+065500_scan016_04.fit']
+# ~ Images = ['PAER_SURV_4_260747_230228_042347-004133_scan017_01.fit','PAER_SURV_4_260747_230228_042347-004133_scan017_02.fit','PAER_SURV_4_260747_230228_042347-004133_scan017_03.fit','PAER_SURV_4_260747_230228_042347-004133_scan017_04.fit']
+# ~ Images = ['PAER_SURV_4_260753_230228_042347+065500_scan017_01.fit','PAER_SURV_4_260753_230228_042347+065500_scan017_02.fit','PAER_SURV_4_260753_230228_042347+065500_scan017_03.fit','PAER_SURV_4_260753_230228_042347+065500_scan017_04.fit']
+# ~ Images = ['PAER_SURV_4_260759_230228_042347+015037_scan018_01.fit','PAER_SURV_4_260759_230228_042347+015037_scan018_02.fit','PAER_SURV_4_260759_230228_042347+015037_scan018_03.fit','PAER_SURV_4_260759_230228_042347+015037_scan018_04.fit']
+# ~ Images = ['PAER_SURV_4_260765_230228_042347-081807_scan019_01.fit','PAER_SURV_4_260765_230228_042347-081807_scan019_02.fit','PAER_SURV_4_260765_230228_042347-081807_scan019_03.fit','PAER_SURV_4_260765_230228_042347-081807_scan019_04.fit']
+# ~ Images = ['PAER_SURV_4_260771_230228_042347+015037_scan019_01.fit','PAER_SURV_4_260771_230228_042347+015037_scan019_02.fit','PAER_SURV_4_260771_230228_042347+015037_scan019_03.fit','PAER_SURV_4_260771_230228_042347+015037_scan019_04.fit']
+# ~ Images = ['PAER_SURV_4_260777_230228_080700-074353_scan101_01.fit','PAER_SURV_4_260777_230228_080700-074353_scan101_02.fit','PAER_SURV_4_260777_230228_080700-074353_scan101_03.fit','PAER_SURV_4_260777_230228_080700-074353_scan101_04.fit']
+Images = ['PAER_SURV_4_260783_230228_080700+045703_scan101_01.fit','PAER_SURV_4_260783_230228_080700+045703_scan101_02.fit','PAER_SURV_4_260783_230228_080700+045703_scan101_03.fit','PAER_SURV_4_260783_230228_080700+045703_scan101_04.fit']
 
-# ~ Images = ['PAER_SURV_4_260795_230228_080700+022452_scan102_01.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_02.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_03.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_04.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_04.fit']
-# ~ Images = ['PAER_SURV_4_260795_230228_080700+022452_scan102_01.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_02.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_03.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_04.fit','PAER_SURV_4_260795_230228_080700+022452_scan102_01.fit']
+
+
 A = time.time()
-dic = SPADEFunctions.CompareImagesJsonSkyCoord2(DayDirectory,Images,scale = 4.7)
+dic = SPADEFunctions.CompareImagesJsonSkyCoord(DayDirectory,Images,scale = 4.7)
 dic_unicas = SPADEFunctions.MakeDicUnique(dic)
 objetos = SPADEFunctions.SeeVariation(dic_unicas,np.radians(130/3600))
-objetos = SPADEFunctions.CleanObjects(objetos)
-
-
+objetos = SPADEFunctions.CleanObjects(objetos,config)
 
 
 fig,axes = plt.subplots(1,2)
@@ -44,17 +58,30 @@ ax = axes.ravel()
 vmin,vmax = None,None
 Data = CCDData.read(f"{DayDirectory}/ReducedImages/{Images[0]}", unit = 'adu')
 raw = Data.data
+ax[0].imshow(raw,cmap='gray',vmin=vmin or np.nanpercentile(raw,1),vmax=vmax or np.nanpercentile(raw, 99))
 ax[1].imshow(raw,cmap='gray',vmin=vmin or np.nanpercentile(raw,1),vmax=vmax or np.nanpercentile(raw, 99))
 
-print(objetos)
+# ~ print(objetos)
 
 for obj in objetos:
 	for Number in objetos[obj]['Number']:
 		data1 = dic[Number]
-		print(data1)
 		image,X,Y = int(data1['image'][0])-1, data1['Xdetect'][0], data1['Ydetect'][0]
-		c1 = plt.Circle((X,Y),size, color = color[image], linewidth=1,fill=False)
+		c1 = plt.Circle((X,Y),size, color = color[image], linewidth=2,fill=False)
 		ax[1].add_patch(c1)
+		
+fontprops = fm.FontProperties(size=8)
+
+scalebar = AnchoredSizeBar(ax[1].transData,
+                            75/4.7, '(75 arcsec)', 
+                            'lower center', 
+                           pad=0.1,
+                           color='white',
+                           frameon=False,
+                           size_vertical=1,
+                           fontproperties=fontprops)
+
+ax[1].add_artist(scalebar)
 
 plt.show()
 

@@ -5,7 +5,6 @@ Latitude 40.182416
 Longitude -7.874175
 Height 910
 
-
 LOGGER 10
 Catalog UCAC5					# Catalog to be used, the options implemented are: Tycho2 (tycho2.dat file), UCAC4 (UCAC4 folder), UCAC5 (UCAC5 folder), Hipparchos (hipparcos.fits files)  
 MagLim 15
@@ -34,11 +33,21 @@ PSFexConfig defaultBRUNO.psfex		# Configuration file for PSFex
 VIGNET 45
 
 # Astrometry
-cpulimit 10					# time limit for astrometry per index
+cpulimit 300					# time limit for astrometry per index
 scale-low 4					# low estimate for image scale
 scale-high 5					# high estimate for image scale
 scale-units app				# untis for image scale estimates
 radius 3					# estimate for radius of image in degrees (diagonal of image)
 max_sep 2					# units of FWHM for comparison between stars found and catalog
+BrightParameter MAG_ISOCOR			# Parameter to order
+NSources 200					# number of sources for plate solving (+ gives first values (magnitude), - gives last values (flux))
+
+# Movement Detection
+CheckDistance True
+percent_distance 0.1				# Percentage for difference in distance allowed from image to image
+CheckDirection True
+angle_difference 8				# Difference in degrees between direction of consecutive images, in degrees
+
+
 
 
