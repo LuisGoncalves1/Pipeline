@@ -1154,8 +1154,6 @@ def ReadFilesHeader(DayDirectory,header,File):
 	FILES CREATED:
 	None
 	'''
-	
-	data=[]
 	Header_information={}
 
 	Header_information['Image'] =File[-2]+File[-1] #Stores the last two strings of file name, that is associated to the image number, so you know to which image the header information is associated to.
@@ -1175,7 +1173,7 @@ def ReadFilesHeader(DayDirectory,header,File):
 		if i[0]=='0':
 			idx=Day.index(i)
 			Day[idx]=i[1]
-
+			
 	Time_UT=header['FULLTIME'].split(":")
 
 	for i in Time_UT:
@@ -1193,7 +1191,8 @@ def ReadFilesHeader(DayDirectory,header,File):
 	exp_time=float(header['EXPTIME'])
 	minute=int(Time_UT[1])
 	second=float(Time_UT[2])+exp_time/2
-		
+	
+	
 	if second >= 60:
 		minute=minute+1
 		if minute >= 60:
@@ -1203,15 +1202,18 @@ def ReadFilesHeader(DayDirectory,header,File):
 			
 		Header_information['Second']=int(second-60) 
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-		data.append(Header_information)
+	
 	else:
 		Header_information['Minute']=minute
 		Header_information['Second']=int(second)
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
-		data.append(Header_information)
+	
 		
 
-	return data
+	return Header_information
+
+	
+
 	
 def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
 	 
