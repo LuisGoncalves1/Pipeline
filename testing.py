@@ -22,11 +22,54 @@ day = "2022-03-20"
 DayDirectory = "%s/Files/Images/%s" %(PipelineDirectory,str(day))
 config_file='ConfigurationDefesa.txt'
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
-TLE_file='Full Catalog-20230228T0000.json'
+TLE_Directory = f"{DayDirectory}/TLE"
 
-#X=[1,1,2048,2048]
-#Y=[1,2048,1,2048]
-	
+
+#This need to be defined before running the code. 
+FIT_Files=['PAER_SURV_4_260783_230228_080700+045703_scan101_01.fit',
+'PAER_SURV_4_260783_230228_080700+045703_scan101_02.fit',
+'PAER_SURV_4_260783_230228_080700+045703_scan101_03.fit',
+'PAER_SURV_4_260783_230228_080700+045703_scan101_04.fit']
+TLE_file='Full Catalog-20230228T0000.json'
+ImageDay='28Fev2023'
+TargetDec='4'
+
+
+CatFilesDirectory=f'{TLE_Directory}/{ImageDay}/Dec={TargetDec}'
+FileXY=f'{TLE_Directory}/XY_window.cat'
+
+
+
+def ArrangeTLEFiles(DayDirectory,CatFilesDirectory,FIT_Files):
+	folder_contents = os.listdir(CatFilesDirectory)
+	if len(folder_contents)==0:
+		for i in range(0,len(FIT_Files)):
+			image=FIT_Files[i]
+			
+			#Second, the output file for AltAz_window
+			src_file_path = f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}'
+			dst_file_path = f'{CatFilesDirectory}/{image.split(".")[0]}'
+			shutil.copy(src_file_path, dst_file_path)
+			new_dst_file_name = f'{image.split(".")[0]}_RaDec_Window'
+			os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
+			
+			#Third, the rdls file for satellite RaDec
+			src_file_path = f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}.rdls'
+			dst_file_path = f'{CatFilesDirectory}/{image.split(".")[0]}.rdls'
+			shutil.copy(src_file_path, dst_file_path)
+			new_dst_file_name = f'Sat_RaDec_image{i+1}.rdls'
+			os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
+			
+			#Fourth, the xy file for satellite
+			src_file_path = f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}'
+			dst_file_path = f'{CatFilesDirectory}/{image.split(".")[0]}'
+			shutil.copy(src_file_path, dst_file_path)
+			new_dst_file_name = f'Sat_XY_image{i+1}'
+			os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
+			
+	else:
+		print(f'Folder in {TLE_Directory}/{ImageDay}/Dec={TargetDec} is not empty. Check if the files are in order.')
+		
 def CreateCatFile_XY(X,Y,FileName):
 	''' 
 	Function that changes the data from the cat file to a set of (x,y) coordinates. 
@@ -59,8 +102,7 @@ def CreateCatFile_XY(X,Y,FileName):
 		A[1].data = np.array(x) # Convert the list of tuples to a NumPy array
 
 		A.close()
-		
-		
+			
 def CreateRDLSFile_RaDEC(Ra,Dec,FileName):
 	''' 
 	Function that changes the data from the RLDS file to a set of (Ra,Dec) coordinates.
@@ -89,17 +131,17 @@ def CreateRDLSFile_RaDEC(Ra,Dec,FileName):
 		fields = X_fields + Y_fields
 
 		# Create the structured array using np.rec.fromarrays()
+	
 		x = np.rec.fromarrays([Ra, Dec], dtype=fields)
-		
 		A[1].data=A[1].data[A[1].data['RA'] > 180] #eliminate all data from the file
 		
 		
 		A[1].data = np.array(x) # Convert the list of tuples to a NumPy array
+			
 
 		A.close()
 
-
-def TLE_parameters(TLE_Directory,TLE_file):
+def TLE_parameters(TLE_Directory,ImageDay,TLE_file):
 	''' 
 	Function that takes the TLE catalog previously stored in a json file and filters the satellites to those select in GeoProtectedZonePlus
 	
@@ -119,7 +161,7 @@ def TLE_parameters(TLE_Directory,TLE_file):
 	mu=3.986004418*10**5 #standard gravitacional parameter of the Earth in km³/s²
 	geo_altitude=35786 #in kms
 	
-	with open(f'{TLE_Directory}/{TLE_file}','r') as fp:
+	with open(f'{TLE_Directory}/{ImageDay}/{TLE_file}','r') as fp:
 		GP_elements= json.load(fp)
 		
 		for i in GP_elements:
@@ -149,15 +191,7 @@ def TLE_parameters(TLE_Directory,TLE_file):
 			data.append(temp)
 	return data
 									
-
-FIT_Files=['PAER_SURV_4_260789_230228_080700-051142_scan102_01.fit',
-'PAER_SURV_4_260789_230228_080700-051142_scan102_02.fit',
-'PAER_SURV_4_260789_230228_080700-051142_scan102_03.fit',
-'PAER_SURV_4_260789_230228_080700-051142_scan102_04.fit']
-
-FileXY='XY_window.cat'
-
-def AltAz_window(config,info,image,TLE_Directory,DayDirectory):
+def AltAz_window(config,info,image,CatFilesDirectory,DayDirectory,FileXY):
 	
 	''' 
 	Function that returns the maximum and minimum value of Alt,Az coordinates of the FOV of each image expressed by FIT_Files.
@@ -169,7 +203,6 @@ def AltAz_window(config,info,image,TLE_Directory,DayDirectory):
 	config				-> Configuration Dictionary										(dic)
 	info 				-> Image header information										(dic)
 	image				-> Image that's being analysed									(str)
-	DayDirectory 		-> Directory of present day										(str)
 	TLE_Directory       -> Directory of the TLE information								(str)
 
 	RETURNS:
@@ -184,12 +217,12 @@ def AltAz_window(config,info,image,TLE_Directory,DayDirectory):
 	Az=[]
 	
 	#Transforms the XY coodinates [(1,1);(1,2048);(2048,1);(2048,2048)] from XY_window.cat file to RaDec for each image.
-	FileWc=f'{TLE_Directory}/{image.split(".")[0]}.wcs'
-	FileOutput=f'{TLE_Directory}/{image.split(".")[0]}_RaDec_Window'
+	FileWc=f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}.wcs'
+	FileOutput=f'{CatFilesDirectory}/{image.split(".")[0]}_RaDec_Window'
 	SPADEFunctions.XYToRaDec(FileWc,FileXY,FileOutput)
-		
+	
 	#Opens fit file created with RaDec coordinates
-	A=fits.open(f'{TLE_Directory}/{image.split(".")[0]}_RaDec_Window')
+	A=fits.open(f'{CatFilesDirectory}/{image.split(".")[0]}_RaDec_Window')
 		
 	declination=A[1].data['DEC']
 	right_ancention=A[1].data['RA']
@@ -219,9 +252,8 @@ def AltAz_window(config,info,image,TLE_Directory,DayDirectory):
 	Az_window=[min(Az),max(Az)]
 
 	return Alt_window, Az_window
-
-		
-def SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file):
+	
+def SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file,CatFilesDirectory,TLE_Directory,ImageDay):
 	''' 
 	This function loads TLE information from json file and returns a list of the satellites that were present at the time and place the images were obtained.
 	In order to represent the satelites position in XY coordinates, cat files are created with RaDec coordinates and XY coordinates of the selected 
@@ -239,12 +271,13 @@ def SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file):
 	
 	'''
 	
-	TLE_Directory = f"{PipelineDirectory}/Files/TLE"
-	tle_list=TLE_parameters(TLE_Directory,TLE_file)
+	ArrangeTLEFiles(DayDirectory,CatFilesDirectory,FIT_Files)
+	
+	tle_list=TLE_parameters(TLE_Directory,ImageDay,TLE_file)
 	ts = load.timescale()
 	
 	satellites=[]
-	
+
 	for num in range(0,len(FIT_Files)):
 		
 		image=FIT_Files[num]
@@ -254,7 +287,7 @@ def SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file):
 
 		t = ts.utc(info['Year'],info['Month'],info['Day'],info['Hour'],info['Minute'],info['Second'])
 		
-		Alt,Az=AltAz_window(config,info,image,TLE_Directory,DayDirectory)
+		Alt,Az=AltAz_window(config,info,image,CatFilesDirectory,DayDirectory,FileXY)
 		Ra=[]
 		Dec=[]
 	
@@ -287,21 +320,22 @@ def SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file):
 				Ra.append(math.degrees(ra.radians))
 				Dec.append(math.degrees(dec.radians))
 		
-		FileName=f'{TLE_Directory}/Sat_RaDec_image{num+1}.rdls' 
+		FileName=f'{CatFilesDirectory}/Sat_RaDec_image{num+1}.rdls' 
 		CreateRDLSFile_RaDEC(Ra,Dec,FileName)
 
-		
+	
 		FileWc=f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}.wcs'
-		FileOutput=f'{TLE_Directory}/Sat_XY_image{num+1}'
-		SPADEFunctions.RaDecToXY(FileWc,FileName,FileOutput)
+		FileOutput=f'{CatFilesDirectory}/Sat_XY_image{num+1}'
+		result, status = SPADEFunctions.RaDecToXY(FileWc,FileName,FileOutput)
+		print(result)
+		print(status)
 		
 
 	return satellites
-				
+	
+SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file,CatFilesDirectory,TLE_Directory,ImageDay)
 
-satellites=SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file)
-
-def Drawing_Satellites_TLE_Position(DayDirectory,image,sat_xy_coordinates):
+def Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,image,sat_xy_coordinates):
 	
 	'''
 	Function created to plot the image being analysed and draw the position of the satellites on top of it, according to the files created in SatellitePosition
@@ -316,9 +350,8 @@ def Drawing_Satellites_TLE_Position(DayDirectory,image,sat_xy_coordinates):
 	NONE
 	'''
 	
-		
-	TLE_Directory = f"{PipelineDirectory}/Files/TLE"
-	A=fits.open(f'{TLE_Directory}/{sat_xy_coordinates}')
+	
+	A=fits.open(f'{CatFilesDirectory}/{sat_xy_coordinates}')
 		
 	x=A[1].data['X']
 	y=A[1].data['Y']
@@ -356,7 +389,7 @@ def Drawing_Satellites_TLE_Position(DayDirectory,image,sat_xy_coordinates):
 	return True
 
 
-Drawing_Satellites_TLE_Position(DayDirectory,'PAER_SURV_4_260789_230228_080700-051142_scan102_01.fit','Sat_XY_image1')
+Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,'PAER_SURV_4_260783_230228_080700+045703_scan101_04.fit','Sat_XY_image4')
  
 
 
