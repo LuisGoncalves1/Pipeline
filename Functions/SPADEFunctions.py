@@ -22,6 +22,10 @@ from astropy.coordinates import SkyCoord, Longitude,  Angle, match_coordinates_s
 import struct
 import requests
 import json
+import shutil
+from skyfield.api import EarthSatellite
+from skyfield.api import load, wgs84,utc
+import math
 # CATALOG FUNCTIONS
 
 def UCAC5ToTxtTotal(FileIn,FileOutput):
@@ -1252,7 +1256,7 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 	header_data=ReadFilesHeader(DayDirectory,header,File)
 	#The algoritm only continues when the image of which the header information is associated to is the same as the image of current Base
 	
-	time = datetime.datetime(header_data[0]['Year'],header_data[0]['Month'],header_data[0]['Day'],header_data[0]['Hour'],header_data[0]['Minute'],header_data[0]['Second'],header_data[0]['Microsecond'])
+	time = datetime.datetime(header_data['Year'],header_data['Month'],header_data['Day'],header_data['Hour'],header_data['Minute'],header_data['Second'],header_data['Microsecond'])
 
 	for i in range(len(Detections)):
 			
@@ -1722,7 +1726,395 @@ def ImagePlotTxt(DayDirectory,Images):
 
 
 	plt.show()		
+
+
+
+#####################################################################################################################################################################
+#TLE code
+
+
+def CreateFilesForTLE(DayDirectory,TLE_Directory,FIT_Files):
+	''' 
+	Function that copies .fit and .rdls files from AstrometryFiles directory to the TLE directory and renames them. 
+
+	INPUTS:
+	DayDirectory 		-> Directory of present day												(str)
+	FIT_Files 			-> List of image names													(lst)
+	TLE_Directory       -> Directory of the TLE information										(str)
+
+	RETURNS:
+	NONE
+	
+	FILES CREATED:
+	f'{image.name}_RaDec_Window'    -> Copied files with new names. 4 files are created, one for each image.
+	f'{image.name}_RaDec.rdls'      -> Copied file with new name. Only 1 file is created.
+	f'{image.name}_XY'              -> Copied file with new name. Only 1 file is created.
+
+	'''
+	
+
+	for i in range(0,len(FIT_Files)):
+		image=FIT_Files[i]
 		
+		#Creates the Output files for AltAz_window function. Since Ra and Dec coordinates vary with time and date, and it is necessary to have four files because the
+		# Alt_window and Az_window result will be different for each image.
+		src_file_path = f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}'
+		dst_file_path = f'{TLE_Directory}/{image.split(".")[0]}'
+		shutil.copy(src_file_path, dst_file_path)
+		new_dst_file_name = f'{image.split(".")[0]}_RaDec_Window'
+		os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
+		
+	#Creates the rdls file to store the satellite RaDec coordinates. 
+	src_file_path = f'{DayDirectory}/AstrometryFiles/{FIT_Files[0].split(".")[0]}.rdls'
+	dst_file_path = f'{TLE_Directory}/{image.split(".")[0]}.rdls'
+	shutil.copy(src_file_path, dst_file_path)
+	new_dst_file_name = f'{FIT_Files[0].split(".")[0][:-3]}_RaDec.rdls'
+	os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
+	
+	#Creates the fit file to store the satellite XY coordinates.
+	src_file_path = f'{DayDirectory}/AstrometryFiles/{FIT_Files[0].split(".")[0]}'
+	dst_file_path = f'{TLE_Directory}/{image.split(".")[0]}'
+	shutil.copy(src_file_path, dst_file_path)
+	new_dst_file_name = f'{FIT_Files[0].split(".")[0][:-3]}_XY'
+	os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
+			
+def CreateCatFile_XY(X,Y,FileName):
+	''' 
+	Function that changes the data from the cat file to a set of (x,y) coordinates. 
+	
+	INPUTS:
+	Ra 					-> array with x coordinates									(list)
+	Dec 				-> array with y coordinates									(list)
+	FileName 			-> Name of cat file											 (cat)
+	
+	RETURNS:
+	NONE
+	
+	FILES CHANGED:
+	FileName			-> Changes x,y information to match with x,y given		    (cat)
+	'''
+	with fits.open(FileName, mode = 'update') as A:
+
+		# Define the field names and types for X and Y separately
+		X_fields = [('X_IMAGE', '>f4')]
+		Y_fields = [('Y_IMAGE', '>f4')]
+
+		# Concatenate the field definitions
+		fields = X_fields + Y_fields
+
+		# Create the structured array using np.rec.fromarrays()
+		x = np.rec.fromarrays([X, Y], dtype=fields)
+
+		A[1].data[A[1].data['X_IMAGE'] > 2049] #eliminate all data from the file
+		
+		A[1].data = np.array(x) # Convert the list of tuples to a NumPy array
+
+		A.close()
+			
+def CreateRDLSFile_RaDEC(Ra,Dec,FileName):
+	''' 
+	Function that changes the data from the RLDS file to a set of (Ra,Dec) coordinates.
+	
+	INPUTS:
+	Ra 					-> array with Ra coordinates									(list)
+	Dec 				-> array with Dec coordinates									(list)
+	FileName 			-> Name of rdls file											(rdls)
+	
+	RETURNS:
+	NONE
+	
+	FILES CHANGED:
+	FileName			-> Changes Ra,Dec information to match with Ra,Dec given		(rdls)
+	
+	'''
+
+	with fits.open(FileName, mode = 'update') as A:
+
+		# Define the field names and types for X and Y separately
+		
+		X_fields = [('RA', '<f8')]
+		Y_fields = [('DEC','<f8')]
+
+		# Concatenate the field definitions
+		fields = X_fields + Y_fields
+
+		# Create the structured array using np.rec.fromarrays()
+	
+		x = np.rec.fromarrays([Ra, Dec], dtype=fields)
+		A[1].data=A[1].data[A[1].data['RA'] > 180] #eliminate all data from the file
+		
+		
+		A[1].data = np.array(x) # Convert the list of tuples to a NumPy array
+			
+
+		A.close()
+
+def TLE_parameters(TLE_Directory,TLE_file):
+	''' 
+	Function that takes the TLE catalog previously stored in a json file and filters the satellites to those select in GeoProtectedZonePlus
+	
+	INPUTS:
+	TLE_file		 					-> Tle Catalog in a json file									(json)
+	TLE_Directory       				-> Directory of the TLE information							    (str)
+
+	RETURNS:
+	data  								> List of satellites that meet the criteria						(list)
+	
+	FILES CREATED:
+	NONE
+
+	'''
+	
+	data=[]
+	earth_radius=6.3781*10**3 #in kms
+	mu=3.986004418*10**5 #standard gravitacional parameter of the Earth in km³/s²
+	geo_altitude=35786 #in kms
+	
+	with open(f'{TLE_Directory}/{TLE_file}','r') as fp:
+		GP_elements= json.load(fp)
+		
+		for i in GP_elements:
+			temp={}
+			temp['Satellite Number']=i['tle_2'][2:8]
+			temp['tle_1']=i['tle_1']
+			temp['tle_2']=i['tle_2']
+			
+			eccentricity=float('0.'+i['tle_2'][26:33])
+			
+			mean_motion=float(i['tle_2'][52:63]) #revolutions per day 
+
+			convertion=((2*np.pi)/(24*3600))
+			mean_motion=mean_motion*convertion #radians per second
+
+
+			a=(mu**(1/3))/(mean_motion**(2/3)) # calculates the semi-major axis
+
+			Perigee=(a*(1-eccentricity)-earth_radius)
+
+			Apogee=(a*(1+eccentricity)-earth_radius) 
+			
+			
+			#The following condition filters the tles from the catalog and stores only those in GeoProtectedZonePlus orbit
+			#if Perigee>geo_altitude-200 and Apogee<200+geo_altitude:  
+			#	data.append(temp)
+			data.append(temp)
+	return data
+									
+def AltAz_window(config,info,image,TLE_Directory,DayDirectory,FileXY):
+	
+	''' 
+	Function that returns the maximum and minimum value of Alt,Az coordinates of the FOV of each image expressed by FIT_Files.
+	It's assumed that the image maximum value of Alt,Az corresponds to the positions [(1,1);(1,2048);(2048,1);(2048,2048)] in pixels.
+	Therefore, this function writes the RaDec coordinates in the f'{image.name}_RaDec_Window' file created in the CreateFilesforTLE function, using the XY_window.cat file. After
+	that, the RaDec coordinates are tranformed to Alt,Az coordinates. The f'{image.name}_RaDec_Window' file is no longer necessary, so it is deleted from the directory.
+	
+	INPUTS:
+	config				-> Configuration Dictionary										(dic)
+	info 				-> Image header information										(dic)
+	image				-> Image that's being analysed									(str)
+	TLE_Directory       -> Directory of the TLE information								(str)
+
+	RETURNS:
+	Alt_window, Az_window  		-> Two lists, containing the maximum and minimum value of Alt,Az					(list)
+	
+	FILES CREATED:
+	NONE	
+
+	'''
+	
+	Alt=[]
+	Az=[]
+	
+	#Transforms the XY coodinates [(1,1);(1,2048);(2048,1);(2048,2048)] from XY_window.cat file to RaDec for each image.
+	FileWc=f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}.wcs'
+	FileOutput=f'{TLE_Directory}/{image.split(".")[0]}_RaDec_Window'
+	XYToRaDec(FileWc,FileXY,FileOutput)
+	
+	#Opens fit file created with RaDec coordinates
+	A=fits.open(f'{TLE_Directory}/{image.split(".")[0]}_RaDec_Window')
+		
+	declination=A[1].data['DEC']
+	right_ancention=A[1].data['RA']
+	
+	#Location and date information is necessary to convert RaDec to Alt,Az
+	location=EarthLocation(
+			lat=float(config['Latitude'])*u.deg,
+			lon=float(config['Longitude'])*u.deg,
+			height=float(config['Height'])*u.m)
+	
+	time = datetime.datetime(info['Year'],info['Month'],info['Day'],info['Hour'],info['Minute'],info['Second'],info['Microsecond'])
+
+	#Ra,Dec coordinates are tranformed to Alt,Az coordinates 
+	for i in range(0,len(declination)):
+				
+		dec=(declination[i])*u.deg
+		ra=(right_ancention[i])*u.deg
+		stars = SkyCoord(ra, dec, frame='icrs')
+	
+		stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
+		sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
+	
+		Alt.append(sky_coords[0])
+		Az.append(sky_coords[1])
+	
+	#The FileOutput is no longer necessary, so it is deleted from TLE directory
+	os.remove(f'{TLE_Directory}/{image.split(".")[0]}_RaDec_Window')
+			
+	Alt_window=[min(Alt),max(Alt)]
+	Az_window=[min(Az),max(Az)]
+
+	return Alt_window, Az_window
+	
+def TLESatellitePosition(config,DayDirectory,FileXY,FIT_Files,header_data,TLE_file,TLE_Directory):
+	''' 
+	This function loads TLE information from json file and returns a list of satellite information that was present at the time and place the images were obtained (Catalog Number,
+	Azimuth, Altitude, Right Ancention, Declination, X and Y)
+	In order to obtain the satelites position in XY coordinates it is necessary to write the satellite RaDec coordinates (calculated using python Skyfield) in the 
+	f'{image.name}_RaDec.rdls' file that was  created in CreateFilesForTle function. After that, the algorithm uses the rdls file with this new information and writes the satellite 
+	XY coordinates in the f'{image.name}_XY file, that was also created with CreateFilesForTle function.
+
+	
+	INPUTS:
+	config				-> Configuration Dictionary																(dic)
+	DayDirectory 		-> Directory of present day																(str)
+	FileXY 				-> Cat file with XYcoordinates [(1,1);(1,2048);(2048,1);(2048,2048)]					(str)
+	FIT_Files 			-> List of image names																	(lst)
+	TLE_file		 	-> Tle Catalog in a json file															(json)
+	TLE_Directory       -> Directory of the TLE information									 					(str)
+	header_data			-> List of header information of each set of images 									(lst)
+	
+	RETURNS:
+	satellites  		-> List of (Catalog Number, Azimuth, Altitude, Right Ancention, Declination, X and Y)	(list)
+	
+	'''
+	
+	CreateFilesForTLE(DayDirectory,TLE_Directory,FIT_Files)
+	
+	tle_list=TLE_parameters(TLE_Directory,TLE_file)
+	ts = load.timescale()
+	
+	satellites=[]
+	Ra=[]
+	Dec=[]
+
+	for num in range(0,len(FIT_Files)):
+		
+		image=FIT_Files[num]
+		info=header_data[num]
+		t = ts.utc(info['Year'],info['Month'],info['Day'],info['Hour'],info['Minute'],info['Second'])
+		Alt,Az=AltAz_window(config,info,image,TLE_Directory,DayDirectory,FileXY)
+	
+		for i in tle_list:
+			
+			items={}
+			line1=i['tle_1']
+			line2=i['tle_2']
+			nome=i['Satellite Number']
+	
+			satellite = EarthSatellite(line1, line2, nome, ts) # An Earth satellite loaded from a TLE file and propagated with SGP4. 
+
+			bluffton = wgs84.latlon(float(config['Latitude']), float(config['Longitude']),float(config['Height']))
+			
+			difference = satellite - bluffton 
+		
+			topocentric = difference.at(t)
+				 
+			alt, az, distance = topocentric.altaz()
+			ra, dec, distance = topocentric.radec() 
+			
+			if alt.degrees >= Alt[0] and alt.degrees <= Alt[1] and az.degrees >= Az[0] and az.degrees <= Az[1]:
+				item={}
+				item['Image']=FIT_Files[num]
+				item['Sat Catalog Number']=nome
+				item['Ra (degrees)']=math.degrees(ra.radians)
+				item['Dec (degrees)']=math.degrees(dec.radians)
+				item['Alt (degrees) ']=alt.degrees
+				item['Az (degrees) ']=az.degrees
+				satellites.append(item)		
+				
+				
+				Ra.append(math.degrees(ra.radians))
+				Dec.append(math.degrees(dec.radians))
+		
+	FileName=f'{TLE_Directory}/{FIT_Files[0].split(".")[0][:-3]}_RaDec.rdls' 
+	CreateRDLSFile_RaDEC(Ra,Dec,FileName)
+
+	
+	FileWc=f'{DayDirectory}/AstrometryFiles/{FIT_Files[0].split(".")[0]}.wcs'
+	FileOutput=f'{TLE_Directory}/{FIT_Files[0].split(".")[0][:-3]}_XY'
+	result, status = RaDecToXY(FileWc,FileName,FileOutput)
+	
+	return satellites
+	
+def Write_TLE_Output_Json(FIT_Files,Satellite,TLE_Directory):
+	''' 
+	Function that creates a json file with all the satellites that the pipeline should be detecting in a set of images.
+	 The file created stores the following information: ImageName,CatalogNumber,Alt,Az,Ra,Dec,X,Y
+	
+	INPUTS:
+	Satellite                           -> List of Satelites information								(lst)
+	FIT_Files 							-> List of image names											(lst)
+	TLE_Directory       				-> Directory of the TLE information							    (str)
+							
+	
+	FILES CREATED:
+	f'{image.name}_Ouput.json'          -> Json File with Satellite information 						(json)
+
+	'''
+	
+	A=fits.open(f'{TLE_Directory}/{FIT_Files[0].split(".")[0][:-3]}_XY')
+	x=A[1].data['X']
+	y=A[1].data['Y']
+	data=[]
+	for i in range(0,len(x)):
+		if x[i]<0 or y[i]<0: #If x or y is negative, it means the satellite is outside the FOV of the image, therefore it's not stored
+			continue
+		else:
+			Satellite[i]['X (pixel) ']=x[i]
+			Satellite[i]['Y (pixel) ']=y[i]
+			data.append(Satellite[i])
+			
+			
+	with open(f'{TLE_Directory}/{FIT_Files[0].split(".")[0][:-3]}_Ouput.json', 'w') as f:
+		json.dump(data, f, indent=3)
+			
+
+def Run_TLE_Code(config,PipelineDirectory,DayDirectory,FileXY,TLE_Directory):
+	
+	files=os.listdir(f"{DayDirectory}/ProcessedImages")
+
+	dic = {}
+	for elem in files:
+		if elem.split(".")[0][:-2] not in dic:
+			dic[elem.split(".")[0][:-2]]=[]
+		dic[elem.split(".")[0][:-2]].append(elem)
+		
+	result = list(dic.values())
+
+	
+	for image_set in result:
+		FIT_Files=image_set
+		
+		header_data=[]
+		for img in range(0,len(FIT_Files)):
+			Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + FIT_Files[img]}", unit = 'adu') 
+			header=Data.header
+			info=ReadFilesHeader(DayDirectory,header,FIT_Files[img])
+			header_data.append(info)
+		
+		for i in header_data:
+			TLE=str(i['Year'])+str(i['Month'])+str(i['Day'])
+
+		TLE_file=f'TLE Catalog-{TLE}.json'
+		
+		if os.path.exists(f'{TLE_Directory}/{TLE_file}'):
+			Satellite=TLESatellitePosition(config,DayDirectory,FileXY,FIT_Files,header_data,TLE_file,TLE_Directory)
+			Write_TLE_Output_Json(FIT_Files,Satellite,TLE_Directory)
+	
+		else:
+			print('TLE FILE missing')
+				
+
 
 ##################################################################################################################################################################
 
@@ -2206,9 +2598,8 @@ def CleanObjects(Objects,config):
 		print(np.degrees(abs(max(dV)-min(dV))))
 			
 	return Objects
-	
-	
-##################################################################################################################################################################
+		
+#################################################################################################################################################################
 
 # In Development
 
@@ -2502,5 +2893,3 @@ def CompareImagesJsonSkyCoordOld(DayDirectory,Images,scale):
 					dic[len(dic)-1][key] = []
 					dic[len(dic)-1][key].append(float(obj[key]))
 	return dic
-
-
