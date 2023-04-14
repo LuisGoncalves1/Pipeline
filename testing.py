@@ -26,19 +26,16 @@ TLE_Directory = f"{DayDirectory}/TLE"
 
 
 #This need to be defined before running the code. 
-FIT_Files=['PAER_SURV_4_260783_230228_080700+045703_scan101_01.fit',
-'PAER_SURV_4_260783_230228_080700+045703_scan101_02.fit',
-'PAER_SURV_4_260783_230228_080700+045703_scan101_03.fit',
-'PAER_SURV_4_260783_230228_080700+045703_scan101_04.fit']
+FIT_Files=['PAER_SURV_4_260765_230228_042347-081807_scan019_01.fit',
+'PAER_SURV_4_260765_230228_042347-081807_scan019_02.fit',
+'PAER_SURV_4_260765_230228_042347-081807_scan019_03.fit',
+'PAER_SURV_4_260765_230228_042347-081807_scan019_04.fit']
 TLE_file='Full Catalog-20230228T0000.json'
 ImageDay='28Fev2023'
-TargetDec='4'
-
+TargetDec=f'-8'
 
 CatFilesDirectory=f'{TLE_Directory}/{ImageDay}/Dec={TargetDec}'
 FileXY=f'{TLE_Directory}/XY_window.cat'
-
-
 
 def ArrangeTLEFiles(DayDirectory,CatFilesDirectory,FIT_Files):
 	folder_contents = os.listdir(CatFilesDirectory)
@@ -46,26 +43,26 @@ def ArrangeTLEFiles(DayDirectory,CatFilesDirectory,FIT_Files):
 		for i in range(0,len(FIT_Files)):
 			image=FIT_Files[i]
 			
-			#Second, the output file for AltAz_window
+			#The output file for AltAz_window
 			src_file_path = f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}'
 			dst_file_path = f'{CatFilesDirectory}/{image.split(".")[0]}'
 			shutil.copy(src_file_path, dst_file_path)
 			new_dst_file_name = f'{image.split(".")[0]}_RaDec_Window'
 			os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
 			
-			#Third, the rdls file for satellite RaDec
-			src_file_path = f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}.rdls'
-			dst_file_path = f'{CatFilesDirectory}/{image.split(".")[0]}.rdls'
-			shutil.copy(src_file_path, dst_file_path)
-			new_dst_file_name = f'Sat_RaDec_image{i+1}.rdls'
-			os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
-			
-			#Fourth, the xy file for satellite
-			src_file_path = f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}'
-			dst_file_path = f'{CatFilesDirectory}/{image.split(".")[0]}'
-			shutil.copy(src_file_path, dst_file_path)
-			new_dst_file_name = f'Sat_XY_image{i+1}'
-			os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
+		#The rdls file for satellite RaDec
+		src_file_path = f'{DayDirectory}/AstrometryFiles/{FIT_Files[0].split(".")[0]}.rdls'
+		dst_file_path = f'{CatFilesDirectory}/{image.split(".")[0]}.rdls'
+		shutil.copy(src_file_path, dst_file_path)
+		new_dst_file_name = f'Sat_RaDec.rdls'
+		os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
+		
+		#The xy file for satellite
+		src_file_path = f'{DayDirectory}/AstrometryFiles/{FIT_Files[0].split(".")[0]}'
+		dst_file_path = f'{CatFilesDirectory}/{image.split(".")[0]}'
+		shutil.copy(src_file_path, dst_file_path)
+		new_dst_file_name = f'Sat_XY'
+		os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
 			
 	else:
 		print(f'Folder in {TLE_Directory}/{ImageDay}/Dec={TargetDec} is not empty. Check if the files are in order.')
@@ -271,12 +268,14 @@ def SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file,CatFilesDire
 	
 	'''
 	
-	ArrangeTLEFiles(DayDirectory,CatFilesDirectory,FIT_Files)
+	#ArrangeTLEFiles(DayDirectory,CatFilesDirectory,FIT_Files)
 	
 	tle_list=TLE_parameters(TLE_Directory,ImageDay,TLE_file)
 	ts = load.timescale()
 	
 	satellites=[]
+	Ra=[]
+	Dec=[]
 
 	for num in range(0,len(FIT_Files)):
 		
@@ -288,8 +287,6 @@ def SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file,CatFilesDire
 		t = ts.utc(info['Year'],info['Month'],info['Day'],info['Hour'],info['Minute'],info['Second'])
 		
 		Alt,Az=AltAz_window(config,info,image,CatFilesDirectory,DayDirectory,FileXY)
-		Ra=[]
-		Dec=[]
 	
 		for i in tle_list:
 			
@@ -311,29 +308,52 @@ def SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file,CatFilesDire
 			
 			if alt.degrees >= Alt[0] and alt.degrees <= Alt[1] and az.degrees >= Az[0] and az.degrees <= Az[1]:
 				item={}
-				item['Satellite']=nome
+				item['Image']=FIT_Files[num]
+				item['Sat Catalog Number']=nome
 				item['Ra']=math.degrees(ra.radians)
 				item['Dec']=math.degrees(dec.radians)
+				item['Alt']=alt.degrees
+				item['Az']=az.degrees
 				satellites.append(item)		
 				
 				
 				Ra.append(math.degrees(ra.radians))
 				Dec.append(math.degrees(dec.radians))
 		
-		FileName=f'{CatFilesDirectory}/Sat_RaDec_image{num+1}.rdls' 
-		CreateRDLSFile_RaDEC(Ra,Dec,FileName)
+	FileName=f'{CatFilesDirectory}/Sat_RaDec.rdls' 
+	CreateRDLSFile_RaDEC(Ra,Dec,FileName)
 
 	
-		FileWc=f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}.wcs'
-		FileOutput=f'{CatFilesDirectory}/Sat_XY_image{num+1}'
-		result, status = SPADEFunctions.RaDecToXY(FileWc,FileName,FileOutput)
-		print(result)
-		print(status)
-		
-
+	FileWc=f'{DayDirectory}/AstrometryFiles/{FIT_Files[0].split(".")[0]}.wcs'
+	FileOutput=f'{CatFilesDirectory}/Sat_XY'
+	result, status = SPADEFunctions.RaDecToXY(FileWc,FileName,FileOutput)
+	
 	return satellites
 	
-SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file,CatFilesDirectory,TLE_Directory,ImageDay)
+	
+def Write_TLE_Output_Json(CatFilesDirectory):
+	
+	Satellite=SatellitePosition(config,DayDirectory,FileXY,FIT_Files,TLE_file,CatFilesDirectory,TLE_Directory,ImageDay)
+	A=fits.open(f'{CatFilesDirectory}/Sat_XY')
+	x=A[1].data['X']
+	y=A[1].data['Y']
+	data=[]
+	for i in range(0,len(x)):
+		if x[i]<0 or y[i]<0:
+			continue
+		else:
+			Satellite[i]['X']=x[i]
+			Satellite[i]['Y']=y[i]
+			data.append(Satellite[i])
+			
+			
+	with open(f'{CatFilesDirectory}/TLE_Ouput.json', 'w') as f:
+		json.dump(data, f, indent=3)
+			
+	return Satellite
+	
+#Write_TLE_Output_Json(CatFilesDirectory)
+
 
 def Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,image,sat_xy_coordinates):
 	
@@ -389,7 +409,6 @@ def Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,image,sat_xy_
 	return True
 
 
-Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,'PAER_SURV_4_260783_230228_080700+045703_scan101_04.fit','Sat_XY_image4')
  
 
 
