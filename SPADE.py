@@ -27,7 +27,7 @@ X_IMAGE, Y_IMAGE, FLAGS, FWHM_IMAGE,ELONGATION, FLUX_RADIUS, SNR_WIN, VIGNET, MA
 """
 
 def Analise(File):
-	SPADEFunctions.ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging)
+	SPADEFunctions.ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging,Catalogue,CatalogueMags)
 
 TimeBetweenImages = 10
 PipelineDirectory = os.getcwd()
@@ -48,17 +48,21 @@ if not os.path.isdir(DayDirectory):
 	os.mkdir(diretoria + "/OutputFiles")
 
 
+# Reads Configuration File
 config_file = sys.argv[1]
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
+
+
+# Creates Logger
 config['LOGGER'] = int(config['LOGGER'])
-
-
 if type(config['LOGGER']) != int or 0>config['LOGGER'] or 50<config['LOGGER']:
 	print('Logger fora de range')
 LOG_FORMAT = "%(levelname)s %(asctime)s : %(message)s"
 log_file_name = "%s/%s.log" %(DayDirectory,str(day))
 logging.basicConfig(filename = log_file_name, level = config['LOGGER'],format = LOG_FORMAT, filemode ='w')
 logger = logging.getLogger()
+
+# Creates Master Files if possible
 logging.debug("Starting create Master Files")
 A = time.time()
 SPADEFunctions.CreateMasters(DayDirectory,config)
@@ -66,19 +70,21 @@ logging.info("Tempos para criarMasters : {:.2f}".format(time.time()-A) )
 logging.debug("Master Files Created")
 Masters = SPADEFunctions.SeeMasters(DayDirectory)
 
-# ~ logging.debug("Starting to read catalogue")
-# ~ A = time.time()
-# ~ catalogo,mag,BTMag = SPADEFunctions.ReadTychoCatalogue(catalog_path)
-# ~ logging.info("Tempos para ler catalogo : {:.2f}".format(time.time()-A) )
-# ~ logging.debug("Catalogue Read")
+# Reads the catalogue chosen in the configuration file
+logging.debug("Starting to read catalogue")
+A = time.time()
+DecMin = float(sys.argv[2])
+DecMax = float(sys.argv[3])
+catalog_path = PipelineDirectory + '/Files/Catalogues/'
+Catalogue,CatalogueMags = SPADEFunctions.ReadCatalogue[config['Catalog']](SPADEFunctions.ZonesUCAC(DecMin,DecMax),catalog_path,float(config['MagLim']))
+logging.info("Tempos para ler catalogo : {:.2f}".format(time.time()-A) )
+logging.debug("Catalogue Read")
 
 
-
-
-threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 8)
+threadpool = concurrent.futures.ThreadPoolExecutor(max_workers = 10)
 A = time.time()
 while True:
-	# Enquanto n tem imagens
+	# While therer is no image, SPADE prints the number of active threads and the queue size
 	while len(os.listdir(path=DayDirectory + "/Images")) == 0:
 		print("actives: " + str(len(threadpool._threads)))
 		print("queue: " + str(threadpool._work_queue.qsize()))
@@ -92,7 +98,6 @@ while True:
 	for File in Files:				
 		Path(f"{DayDirectory}/Images/{File}").rename(f"{DayDirectory}/ProcessedImages/{File}")
 		threadpool.submit(Analise,File)
-
 
 
 

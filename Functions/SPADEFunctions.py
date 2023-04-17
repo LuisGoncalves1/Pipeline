@@ -1215,11 +1215,8 @@ def ReadFilesHeader(DayDirectory,header,File):
 		
 
 	return Header_information
-
 	
-
-	
-def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM):
+def WriteOutput_Json(File,DayDirectory,header,config,Information,Catalogue,CatalogueMags):
 	 
 	'''
 	Function that creates a json file with the information about detections from Astrometry:
@@ -1250,40 +1247,33 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 	location=EarthLocation(
 			lat=float(config['Latitude'])*u.deg,
 			lon=float(config['Longitude'])*u.deg,
-			height=float(config['Height'])*u.m)
+			height=float(config['Height'])*u.m)	
+	
 	
 	#Header Information of proessed files
 	header_data=ReadFilesHeader(DayDirectory,header,File)
 	#The algoritm only continues when the image of which the header information is associated to is the same as the image of current Base
 	
-	time = datetime.datetime(header_data['Year'],header_data['Month'],header_data['Day'],header_data['Hour'],header_data['Minute'],header_data['Second'],header_data['Microsecond'])
-
-	for i in range(len(Detections)):
-			
-			Match = found[i]
+	time = datetime.datetime(header_data[0]['Year'],header_data[0]['Month'],header_data[0]['Day'],header_data[0]['Hour'],header_data[0]['Minute'],header_data[0]['Second'],header_data[0]['Microsecond'])
+	
+	keys = list(Information.keys())
+	# ~ Information,Catalogue,CatalogueMags
+	for i in range(len(Information[keys[0]])):			
 			items={}
 			Base = File.split('.')[0]
 			items['image']=File.split('.')[0][-2:]
-			items['Xdetect']=float(X[i])
-			items['Ydetect']= float(Y[i])
-			items['FWHM']= float(FWHM[i])
-			items['SNR']= float(SNR[i])
-			items['RaCalculated'] = float(Detections.ra[i].value)
-			items['DecCalculated'] = float( Detections.dec[i].value)
-			items['MagInst '] = float(DetectionsMags[i])
-			items['Match']= int(Match)
 			
-			if Match:
-				items['RaCatalogue'] = float(Catalogue.ra[i].value)
-				items['DecCatalogue'] = float(Catalogue.dec[i].value)
-				items['MagReal'] =float(CatalogueMags[i])
+			for key in keys:
+				items[key] = float(Information[key][i])
+			if Information['Match'][i]:
+				items['RaCatalogue'] 	= float(Catalogue.ra[i].value)
+				items['DecCatalogue'] 	= float(Catalogue.dec[i].value)
+				items['MagReal'] 		= float(CatalogueMags[i])
 				
-			if not Match:
-				items['MagReal'] ='0'
-			
 
-			dec=(Detections.dec[i].value)*u.deg
-			ra=(Detections.ra[i].value)*u.deg
+			#Ver se não é melhor calcular logo todos os Az e Alt no inicio ou na função anterior
+			ra=items['RaCalculated']*u.deg
+			dec=items['DecCalculated']*u.deg
 			stars = SkyCoord(ra, dec, frame='icrs')
 
 			#Converts Ra,Dec to Alt,Az
@@ -1294,93 +1284,31 @@ def WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsM
 			items['Az']=float(sky_coords[1])
 
 			items_2_store.append(items)
-			
+	
 	with open(f"{DayDirectory}/OutputFiles/{File.split('.')[0]}.json", 'w') as f: 
 		json.dump(items_2_store, f, indent=3)
 						
 	logging.info("Finished Writing Output of image " + File)
 
+def LDAC2fits(File_LDAC, File_fits):
+	
+	"""This function converts the LDAC binary FITS table from SExtractor
+	to a common binary FITS table (that can be read by Astrometry.net) """
+	# read input table and write out primary header and 2nd extension
+	columns = []
+	with fits.open(File_LDAC, memmap=True) as hdulist:
+		# delete VIGNET column
+		hdulist[2].data = drop_fields(hdulist[2].data, 'VIGNET')
+		
+		# and write regular fits file
+		hdulist_new = fits.HDUList([hdulist[0], hdulist[2]])
+		hdulist_new.writeto(File_fits, overwrite=True)
+		hdulist_new.close()
+	return
+
 ##################################################################################################################################################################
 
 # Specific Softwares
-
-def sextractorOld(File,PipelineDirectory,DayDirectory,SexConfig,cattype,VIGNET=None,fit_psf=False):
-	''' 
-	Function to run sextractor on an image and output catalogue file
-	
-	INPUTS:
-	Base 				-> image directory to give to sextractor						(str)
-	PipelineDirectory 	-> directory of the Pipeline folder								(str)
-	DayDirectory 		-> directory of the present day									(str)
-	SexConfig 			-> Configuration catalog used for Sextractor					(str)
-	cattype 			-> Type of output catalog										(str)
-	VINGET 				-> Size of array to save from each image, for PSFEX				(int)
-	fit_psf 			-> Boolean to check wheter to use psf for photometry			(int)
-	
-	RETURNS:
-	result				-> result sextractor software									(str)
-	
-	FILES CREATED:
-	Writes a sextractor catalog at the day Sextractor folder with the same name as the original image
-	
-	
-	'''
-	Base = File.split('.')[0]
-	FileBase = f"{DayDirectory}/SextractorCatalogue/{Base}"
-	SexFile = f"{DayDirectory}/ReducedImages/{File}"
-	SexDir = f"{PipelineDirectory}/Files/Sextractor/" 				# The sextractor directory is inside the pipeline folder
-	
-	if fit_psf:
-		FileBase = FileBase + '_psf'
-	
-	if cattype == 'FITS_1.0':
-		catout = FileBase +'.cat'
-	elif cattype == 'FITS_LDAC':
-		catout = FileBase +'LDAC.cat'
-	else:
-		raise Exception('Not an acceptable catalog type')
-	
-	
-	cmd = {}		
-	cmd['source-extractor'] = SexFile								# Chooses the image directory as the image to analyse			
-	cmd['-c'] = SexDir + SexConfig									# Chooses the sextractor catalogue as the default in the pipeline folder
-	cmd['-CATALOG_NAME'] =  catout									# Chooses the catalogue output as the catout given in the function
-	cmd['-FILTER_NAME'] = SexDir + 'default.conv'
-	cmd['-WEIGHT_IMAGE'] = SexDir + 'weight.fits'
-	cmd['-CATALOG_TYPE'] = cattype
-	cmd['-PARAMETERS_NAME'] = SexDir + 'default.param'				# Chooses the needed files from the sextractor folder
-
-	
-	if fit_psf:
-		cmd['-PSF_NAME'] = psf_out = FileBase.replace('_psf', 'LDAC_psf.fits')
-		with open(SexDir + 'default.param', 'a') as myfile:
-			myfile.write('MAG_PSF\n')
-		
-	if VIGNET != None:
-		with open(SexDir + 'default.param', 'a') as myfile:
-			myfile.write('VIGNET{}\n'.format((VIGNET,VIGNET)))
-	
-	
-	list_cmd = list(itertools.chain.from_iterable(list(cmd.items()))) # Compacts the cmd dictionary created so it can be run through terminal
-	result = subprocess.run(list_cmd, capture_output=True) 			  # Runs the program in terminal and outputs the result and status (0 = good, 255 = bad)
-	status = result.returncode
-	
-	if VIGNET != None:
-		with open(SexDir + 'default.param', '+r') as myfile:
-			lines = myfile.readlines()
-			myfile.seek(0)
-			myfile.truncate()
-			myfile.writelines(lines[:-1])
-	
-	if fit_psf:
-		with open(SexDir + 'default.param', '+r') as myfile:
-			lines = myfile.readlines()
-			myfile.seek(0)
-			myfile.truncate()
-			myfile.writelines(lines[:-1])
-	
-			
-	return result
 
 def sextractor(File,PipelineDirectory,DayDirectory,SexConfig,n):
 	''' 
@@ -1438,7 +1366,7 @@ def sextractor(File,PipelineDirectory,DayDirectory,SexConfig,n):
 	
 			
 	return result
-		    		
+	    		
 def astrometry(DirCatalogo,header,DirAstro,config):
 	''' 
 	Function to run astrometry.net on an image and output created files
@@ -1476,10 +1404,10 @@ def astrometry(DirCatalogo,header,DirAstro,config):
            '--pixel-error','2',
            '--tweak-order','2',
            # ~ '--rdls', 'none',						# none in all files which we do not want, if you want
-           '--solved','none',						# any of the files, comment the line
-           '--corr','none',
-           '--axy','none',
-           '--match','none',
+           # ~ '--solved','none',						# any of the files, comment the line
+           # ~ '--corr','none',
+           # ~ '--axy','none',
+           # ~ '--match','none',
            # ~ '--new-fits', 'none',
            '--radius', config['radius'],			# Radius of the image in degrees (in the diagonal of the image)
            '--overwrite',							# Overwrite if there is already a file with the same name
@@ -1487,7 +1415,6 @@ def astrometry(DirCatalogo,header,DirAstro,config):
            '--out', DirCatalogo.split('/')[-1][:-16],
             DirCatalogo
     ]
-	print(DirCatalogo.split('/')[-1][:-16])
     # log cmd executed
 	cmd_str = ' '.join(cmd) 						  # Compacts the cmd dictionary created so it can be run through terminal
 	
@@ -1727,6 +1654,257 @@ def ImagePlotTxt(DayDirectory,Images):
 
 	plt.show()		
 
+
+#########################################################
+
+# Image Difference detection
+
+def FindMatchJson(obj,ImageData,scale): 
+	''' 
+	Function finds match between an object and all points in a Json file (bad, slow)
+	
+	INPUTS:
+	obj			 		-> Dict of all information from obj from json file					(str)
+	ImageData	 		-> Image data with objects of the same type as obj 			 		(dic)
+	scale 				-> pixel scale used for comparison						 			(float)
+	
+	RETURNS: 
+	key					-> number of object that is matched or False if no match			(CCDData)
+	
+	FILES CREATED:
+	NONE
+	''' 
+	L1=[obj['RaCalculated'],obj['DecCalculated']]
+	for key,point in ImageData.items():  #fixates a point an image to compares to all other points from different images
+		FWHM = max(np.mean(point['FWHM']),obj['FWHM']) 
+		L2=[np.mean(point['RaCalculated']),np.mean(point['DecCalculated'])]
+		distance=AngleDifferencePoints(L1,L2)
+
+		if float(distance) <= scale*FWHM/3600:
+			return key
+	
+	return False
+			
+def CompareImagesJsonSkyCoord(DayDirectory,Images,scale):
+	''' 
+	Function compares Json files to identify unique detections from each image with SkyCoord. Best version to use.
+	
+	INPUTS:
+	DayDirectory 		-> Directory of present day											(str)
+	Images		 		-> JsonFiles corresponding to detections		 			 		(list)
+	scale 				-> pixel scale used for comparison						 			(float)
+	
+	RETURNS: 
+	dic					-> dictionary with all unique sources and information for each		(CCDData)
+	
+	FILES CREATED:
+	NONE
+	''' 
+	if len(Images) == 1:
+		raise Exception('Not enough images to compare!')
+	dic = {}
+	Image = Images[0]
+	Ra1 = []
+	Dec1 = []
+	with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+		ImageData = json.load(stream)
+	for count,obj in enumerate(ImageData):
+		dic[count] = {}
+		Ra1.append(obj['RaCalculated'])
+		Dec1.append(obj['DecCalculated'])  	
+		for i,key in enumerate(obj):
+			dic[count][key] = []
+			dic[count][key].append(float(obj[key]))
+	
+	for count, Image in enumerate(Images[1:]):
+		RaN = []
+		DecN = []
+		FWHM = []
+		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
+			ImageData = json.load(stream)
+		for obj in ImageData:
+			RaN.append(obj['RaCalculated'])
+			DecN.append(obj['DecCalculated'])
+			FWHM.append(obj['FWHM'])
+			
+		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Sources of all previous images
+		DetectionsN = SkyCoord(ra = Longitude(RaN, unit = u.deg), dec = np.array(DecN)*u.deg, frame = 'cirs')  		# Sources of image N
+		idx, d2d, d3d = match_coordinates_sky(DetectionsN, Detections1,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
+		mask = d3d < np.radians(scale*np.median(FWHM)/3600)
+		for i,found in enumerate(mask):
+			obj = ImageData[i]
+			if found:
+				for key in list(dic[idx[i]].keys()):
+					if key in obj:
+						dic[idx[i]][key].append(float(obj[key]))
+				
+			else:
+				Ra1.append(obj['RaCalculated'])
+				Dec1.append(obj['DecCalculated'])
+				dic[len(dic)] = {}
+				for j,key in enumerate(obj):
+					dic[len(dic)-1][key] = []
+					dic[len(dic)-1][key].append(float(obj[key]))
+	return dic
+
+def SeeVariation(dic_unicas,max_sep):
+	'''
+	Number -> number of object in dic
+	
+	
+	
+	'''
+	objects = {}
+	Number1,Ra1,Dec1,X1,Y1,FWHM1 = dic_unicas[1]['Number'],  dic_unicas[1]['Ra'],  dic_unicas[1]['Dec'],	dic_unicas[1]['X'],	dic_unicas[1]['Y'], dic_unicas[1]['FWHM']
+	for i in range(len(Number1)):
+		objects[i] = {}
+		objects[i]['image'] = [1]
+		objects[i]['Number'] = [Number1[i]]
+		objects[i]['Ra'] = [Ra1[i]]
+		objects[i]['Dec'] = [Dec1[i]]
+		objects[i]['X'] = [X1[i]]
+		objects[i]['Y'] = [Y1[i]]
+		objects[i]['FWHM'] = [FWHM1[i]]
+		
+	for image in range(len(dic_unicas)-1):
+		Number2,Ra2,Dec2,X2,Y2,FWHM2 = dic_unicas[image+2]['Number'],dic_unicas[image+2]['Ra'],dic_unicas[image+2]['Dec'],dic_unicas[image+2]['X'],dic_unicas[image+2]['Y'],dic_unicas[image+2]['FWHM']
+			
+		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
+		Detections2 = SkyCoord(ra = Longitude(Ra2, unit = u.deg), dec = np.array(Dec2)*u.deg, frame = 'cirs')  		# Sources of image N+1
+		
+		n = 1
+		while True:
+			idx, d2d, d3d = match_coordinates_sky(Detections2, Detections1,nthneighbor=n,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
+			mask = d3d < max_sep
+			n+=1
+			if sum(mask) == 0:
+				break
+				
+			for count,found in enumerate(mask):
+				if found:
+					if image+2 in objects[idx[count]]['image']:
+						nnew = len(objects)
+						objects[nnew] = {}
+						objects[nnew]['image']  =  objects[idx[count]]['image'][:-1]
+						objects[nnew]['Number'] =  objects[idx[count]]['Number'][:-1]
+						objects[nnew]['Ra']     =  objects[idx[count]]['Ra'][:-1]
+						objects[nnew]['Dec']    =  objects[idx[count]]['Dec'][:-1]
+						objects[nnew]['X']   	=  objects[idx[count]]['X'][:-1]
+						objects[nnew]['Y']    	=  objects[idx[count]]['Y'][:-1]
+						objects[nnew]['FWHM']  	=  objects[idx[count]]['FWHM'][:-1]
+						
+						objects[nnew]['image'].append(image+2)
+						objects[nnew]['Number'].append(Number2[count])
+						objects[nnew]['Ra'].append(Ra2[count])
+						objects[nnew]['Dec'].append(Dec2[count])
+						objects[nnew]['X'].append(X2[count])
+						objects[nnew]['Y'].append(Y2[count])
+						objects[nnew]['FWHM'].append(FWHM2[count])
+						
+					else:
+						objects[idx[count]]['image'].append(image+2)
+						objects[idx[count]]['Number'].append(Number2[count])
+						objects[idx[count]]['Ra'].append(Ra2[count])
+						objects[idx[count]]['Dec'].append(Dec2[count])
+						objects[idx[count]]['X'].append(X2[count])
+						objects[idx[count]]['Y'].append(Y2[count])
+						objects[idx[count]]['FWHM'].append(FWHM2[count])
+						
+				else:
+					nnew = len(objects)
+					objects[nnew] = {}
+					objects[nnew]['image'] 		= [image+2]
+					objects[nnew]['Number'] 	= [Number2[count]]
+					objects[nnew]['Ra'] 		= [Ra2[count]]
+					objects[nnew]['Dec']		= [Dec2[count]]
+					objects[nnew]['X'] 			= [X2[count]]
+					objects[nnew]['Y'] 			= [Y2[count]]
+					objects[nnew]['FWHM']		= [FWHM2[count]]
+				
+			
+		Ra1  = []
+		Dec1 = []
+		for i in range(len(objects)):
+			Ra1.append(objects[i]['Ra'][-1])
+			Dec1.append(objects[i]['Dec'][-1])
+	
+	return objects
+	
+def MakeDicUnique(dic):
+	dic_unicas = {}
+	for i,key in enumerate(dic):
+		if len(dic[key]['image']) == 1:
+			n_image = int(dic[key]['image'][0])
+			
+			if n_image in dic_unicas:
+				dic_unicas[n_image]['image'].append(n_image)
+				dic_unicas[n_image]['Number'].append(key)
+				dic_unicas[n_image]['Ra'].append(dic[key]['RaCalculated'][0])
+				dic_unicas[n_image]['Dec'].append(dic[key]['DecCalculated'][0])
+				dic_unicas[n_image]['X'].append(dic[key]['Xdetect'][0])
+				dic_unicas[n_image]['Y'].append(dic[key]['Ydetect'][0])
+				dic_unicas[n_image]['FWHM'].append(dic[key]['FWHM'][0])
+				
+			else:
+				dic_unicas[n_image] = {}
+				dic_unicas[n_image]['image'] = [n_image]
+				dic_unicas[n_image]['Number'] = [key]
+				dic_unicas[n_image]['Ra'] = dic[key]['RaCalculated']
+				dic_unicas[n_image]['Dec'] = dic[key]['DecCalculated']
+				dic_unicas[n_image]['X'] = dic[key]['Xdetect']
+				dic_unicas[n_image]['Y'] = dic[key]['Ydetect']
+				dic_unicas[n_image]['FWHM'] = dic[key]['FWHM']
+	return dic_unicas
+	
+def CleanObjects(Objects,config):
+	'''
+	Cleans Object dic to only output true movement of objects
+	
+	INPUTS:
+	Objects			-> Dictionary with information about sets of objects   			(dict)
+	
+	OUTPUTS:
+	Objects			-> Clean Dictionary with information about sets of objects  	(dict)
+	
+	'''
+	
+	for obj in list(Objects.keys()):
+		# STEP1: Removes objects with less than 3 detections
+		if len(Objects[obj]['Ra']) < 3:
+			del Objects[obj]
+			continue
+		
+		
+		
+		d,dV = [],[] 
+		for j in range(len(Objects[obj]['image'])-1):
+			image1,image2 = Objects[obj]['image'][j],Objects[obj]['image'][j+1]
+			X1,X2 = Objects[obj]['X'][j],Objects[obj]['X'][j+1]
+			Y1,Y2 = Objects[obj]['Y'][j],Objects[obj]['Y'][j+1]
+			d.append(np.sqrt((X2-X1)**2 + (Y2-Y1)**2)/(image2-image1))
+			dV.append(np.arctan2(Y2-Y1,X2-X1))
+			
+		# STEP2: Removes sets with varying distance between consecutive points	
+		if config['CheckDistance']:	
+			if abs((max(d)-min(d))/max(d)) > float(config['percent_distance']):
+				del Objects[obj]
+				continue
+		#STEP3: Removes sets with varying direction
+		if config['CheckDirection']:	
+			if abs(max(dV)-min(dV)) > np.radians(float(config['angle_difference'])):
+				del Objects[obj]
+				continue
+		print('----------------')
+		print('X: ',X1)
+		print('Y: ',Y1)
+		print('FWHM: ',Objects[obj]['FWHM'][j])
+		print(d)
+		print(abs((max(d)-min(d))/max(d)))
+		print(np.degrees(dV))
+		print(np.degrees(abs(max(dV)-min(dV))))
+			
+	return Objects
+		
 
 
 #####################################################################################################################################################################
@@ -2078,7 +2256,6 @@ def Write_TLE_Output_Json(FIT_Files,Satellite,TLE_Directory):
 	with open(f'{TLE_Directory}/{FIT_Files[0].split(".")[0][:-3]}_Ouput.json', 'w') as f:
 		json.dump(data, f, indent=3)
 			
-
 def Run_TLE_Code(config,PipelineDirectory,DayDirectory,FileXY,TLE_Directory):
 	
 	files=os.listdir(f"{DayDirectory}/ProcessedImages")
@@ -2143,15 +2320,19 @@ def ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	
 	# ~ exposure = float(Data.header['EXPTIME'].replace(',','.'))							# Bruno
 	exposure = float(Data.header['EXPTIME'])												# Defesa
-	
+	Times = {}
 	if config["DARK"]:																		# If DARK is True does dark correction
+		A = time.time()																		
 		Data = DarkCorrection(DayDirectory,Data,File,exposure,logging)
+		DTime = time.time()-A
 	else:	
 		Data.header['DARK'] = 'False'														# Writes in header
 		logging.debug("Skipped Dark correction of file " + File)
 	
 	if config['GAIN']:
+		A = time.time()
 		Data.data = Data.data/float(Data.header['GAIN'])
+		GTime = time.time()-A
 		Data.header['GAIN'] = '1'
 		logging.debug("Finished Gain correction of file " + File)
 	else:
@@ -2159,28 +2340,37 @@ def ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 		logging.debug("Skipped Gain correction of file " + File)
 		
 	if config["FLAT"]:
+		A = time.time()
 		Data = FlatCorrection(DayDirectory,Data,File,Filter,Masters,logging)
+		FTime = time.time()-A
 	else:
 		Data.header['FLAT'] = 'False'														# Writes in header
 		logging.debug("Skipped Flat correction of file " + File)
 	
 	if config["Background"]:
+		A = time.time()
 		Data = BackgroundCorrection(File,Data,logging)
+		BTime = time.time()-A
 	else:
 		Data.header['BG'] = 'False'															# Writes in header
 		logging.debug("Skipped Background correction of file " + File)															
 	
-	if config["CrossTalk"]:																	# Stars crostalk correction if enabled
+	if config["CrossTalk"]:		
+		A = time.time()															# Stars crostalk correction if enabled
 		Data = CrosstalkCorrection(File,Data,logging,config)
+		CTime = time.time()-A
 	else:
 		Data.header['CT'] = 'False'															# Writes in header
 		logging.debug("Skipped Crosstalk correction of file " + File)
 	
 	if config["CosmicRays"]:
+		A = time.time()
 		CosmicRayCorrection(File,Data,logging)
+		CRTime = time.time()-A
 	else:
 		Data.header['CR'] = 'False'															# Writes in header
 		logging.debug("Skipped CosmicRay correction of file " + File)
+	
 	
 	DirImage = f"{DayDirectory}/ReducedImages/{File}"	
 	Data.write(DirImage, overwrite = True)
@@ -2210,6 +2400,7 @@ def SextractorPart(File,PipelineDirectory,DayDirectory,config):
 	Base_out.cat		-> Ouput file with PSFEX									(txt)
 	Base_psfLDAC.cat	-> Sextractor catalog obtained using PSF model				(Final File)
 	'''
+	A = time.time()
 	Base = File.split('.')[0]
 	FileBase = f"{DayDirectory}/SextractorCatalogue/{Base}"
 	VIGNET = int(config['VIGNET'])
@@ -2217,31 +2408,28 @@ def SextractorPart(File,PipelineDirectory,DayDirectory,config):
 	
 	# First Sextractor pass: creates 2 catalogs: one in Fits_1.0 format for use in astrometry.net and 1 in Fits_LDAC for use in PSFEX, then sources too close to the
 	# border are elliminated. The threshold for the distance is the VIGNET parameter given in the configuration file
-	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],1)
-	if config['VERBOSE']:
-		print(result)
 	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],2)
 	if config['VERBOSE']:
 		print(result)
 	RemoveBorders(FileBase +'LDAC.cat',int(config['VIGNET']))
-	RemoveBorders(FileBase +'.cat',int(config['VIGNET']))	
-	
+	LDAC2fits(FileBase +'LDAC.cat',FileBase +'.cat')	
 	
 	#Secondly, PSFEX is run with the sextractor catalog written before.
-	CatIn 	= f"{FileBase}LDAC.cat"
-	CatOut 	= f"{FileBase}_out.cat"
-	ConfigFile =  f"{PipelineDirectory}/Files/Sextractor/{config['PSFexConfig']}"
-	Rem0FWHM(CatIn)
-	result, status = psfex(CatIn,CatOut,ConfigFile,VIGNET)
-	
-	psf_in = CatIn.replace('.cat', '.psf')
-	psf_out = CatIn.replace('.cat', '_psf.fits')
-	os.rename (psf_in, psf_out)
-	
-	
-	#Lastly, Sextractor is run again with the PSF model, in order to improve photometry
-	logging.info("Finished Sextractor Pass of " + File)
-	resultado = sextractor(Base,PipelineDirectory,DayDirectory,config['SexConfig'],3)
+	if config['Photometry']:
+		CatIn 	= f"{FileBase}LDAC.cat"
+		CatOut 	= f"{FileBase}_out.cat"
+		ConfigFile =  f"{PipelineDirectory}/Files/Sextractor/{config['PSFexConfig']}"
+		Rem0FWHM(CatIn)
+		result, status = psfex(CatIn,CatOut,ConfigFile,VIGNET)
+		
+		psf_in = CatIn.replace('.cat', '.psf')
+		psf_out = CatIn.replace('.cat', '_psf.fits')
+		os.rename (psf_in, psf_out)
+		
+		
+		#Lastly, Sextractor is run again with the PSF model, in order to improve photometry
+		resultado = sextractor(Base,PipelineDirectory,DayDirectory,config['SexConfig'],3)
+	logging.info("Finished Sextractor Pass of " + File)	
 	
 	return resultado
 
@@ -2268,11 +2456,12 @@ def AstrometryPart(File,PipelineDirectory,DayDirectory,config,header):
 	Base				-> Ra/Dec coordinates of detections							(Final File)
 	'''
 	logging.info("Started Astrometry Pass of image " + File)
+	A = time.time()
 	Base = File.split('.')[0]
 	FileWc = f"{DayDirectory}/AstrometryFiles/{Base}.wcs"															# Gets directory : WCS file created from astrometry 
 	FileXY = f"{DayDirectory}/SextractorCatalogue/{Base}.cat"														# Gets directory : catalogue created from sextractor
 	FileOutput = f"{DayDirectory}/AstrometryFiles/{Base}"															# Output file for calculation of RaDec coordinate of all stars
-	FileXYBright = f"{DayDirectory}/SextractorCatalogue/{Base}_cat_bright.fits"										# Output file for calculation of RaDec coordinate of all stars
+	FileXYBright = f"{DayDirectory}/SextractorCatalogue/{Base}_cat_bright.fits"										# Output file for calculation of RaDec coordinate of only the brighest stars
 
     # select the brightest objects
 	Nbright = int(config['NSources'])
@@ -2286,15 +2475,19 @@ def AstrometryPart(File,PipelineDirectory,DayDirectory,config,header):
 		data_sexcat = data_sexcat[index][-Nbright:]
 	fits.writeto(FileXYBright, data_sexcat,overwrite=True)
 	result,status = astrometry(FileXYBright,header,DayDirectory + '/AstrometryFiles',config) 
-
 	# ~ #Transforms from XY to RaDec with WCS information from astrometry
 	
 	result2, status2	= XYToRaDec(FileWc,FileXY,FileOutput)																# Calculates RaDec positions for all stars obtained from sextractor
 	logging.info("Finished Astrometry Pass of image " + File)
+	if config['SaveTimes']:
+		Tempo = time.time() - A
+		with open('/home/luis/Desktop/Codigos/PipelineTrabalhar/Tempos','a') as tempos:
+			linha = f'{Tempo:8}\n'
+			tempos.write(linha)
 	
 	return result,status
 	
-def CatalogComparison(File,PipelineDirectory,DayDirectory,config,Filter):
+def CatalogComparison(File,PipelineDirectory,DayDirectory,config,Catalogue):
 	'''
 	Function that compares image detections with the catalog.
 	
@@ -2315,10 +2508,12 @@ def CatalogComparison(File,PipelineDirectory,DayDirectory,config,Filter):
 	NONE
 	'''
 	logging.info("Started Catalogue Comparison of image " + File)
+	A = time.time()
 	Base = File.split('.')[0]
 	FileOutput = f"{DayDirectory}/AstrometryFiles/{Base}"																# Output file for calculation of RaDec coordinate of all stars
 	FileXY = f"{DayDirectory}/SextractorCatalogue/{Base}.cat"														# Gets directory : catalogue created from sextractor
 	FileWc = f"{DayDirectory}/AstrometryFiles/{Base}.wcs"															# Gets directory : WCS file created from astrometry
+	logging.debug("Catalog:P1")
 	
 	#Gets the information from the sextractor file and the calculated positions
 	Posicoes = fits.open(FileOutput)												# Gets positions calculated
@@ -2326,279 +2521,43 @@ def CatalogComparison(File,PipelineDirectory,DayDirectory,config,Filter):
 	SexData = ReadSextractorFileFit(FileXY)			# Reads sextractor file obtained in the beggining and saves desired values
 	X,Y, DetectionsMags, FWHM, SNR = SexData['X_IMAGE'], SexData['Y_IMAGE'], SexData['MAG_ISOCOR'], SexData['FWHM_IMAGE'],  SexData['SNR_WIN']
 	
+	logging.debug("Catalog:P2")
 	#Matches the objects found and the catalogue
 	Detections = SkyCoord(ra = Longitude(Ra, unit = u.deg), dec = np.array(Dec)*u.deg, frame = 'cirs')  				# Creates SkyCoord object with RaDec positions obtained (needed for matching)
 	WCS = fits.open(FileWc)
+	logging.debug("Catalog:P3")
 	scale = float(WCS[0].header['COMMENT'][-8].split()[1])
-	max_sep = 0.8*float(config['max_sep'])*np.median(FWHM[FWHM!=0])*scale/3600
-	
-	catalog_path = PipelineDirectory + '/Files/Catalogues/'
-	Catalogue,CatalogueMags = ReadCatalogue[config['Catalog']](ZonesUCAC(min(Dec),max(Dec)),catalog_path,float(config['MagLim']))
+	max_sep = float(config['max_sep'])*np.median(FWHM[FWHM!=0])*scale/3600
+	logging.debug("Catalog:P4")
 	idx,found = find_matching_stars(Detections, Catalogue, max_sep=max_sep * u.deg) 						# Starts matching between these stars and catalogue stars
+	print(psutil.virtual_memory()[3]/1000000000)
 	
+	logging.info("Finished Catalogue Comparison of image " + File)
+	Information = {'Xdetect':X,'Ydetect':Y,'RaCalculated':Ra,'DecCalculated':Dec,'MagInst':DetectionsMags,'FWHM':FWHM,'SNR':SNR,'Match':found}
+	
+	return Information, idx
+
+def DebrisClassification(DayDirectory,Images,config,scale):
+	dic 		= CompareImagesJsonSkyCoord(DayDirectory,Images,scale)
+	dic_unicas 	= MakeDicUnique(dic)
+	objetos 	= SeeVariationOld(dic_unicas,np.radians(config['VariationInImage']/3600))
+	objetos 	= CleanObjects(objetos,config)
+			
+	return objetos		
+				
+def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging,Catalogue,CatalogueMags):
+	header 					= ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging)
+	result 					= SextractorPart(File,PipelineDirectory,DayDirectory,config)
+	result,status 			= AstrometryPart(File,PipelineDirectory,DayDirectory,config,header)
+	Information,idx 		= CatalogComparison(File,PipelineDirectory,DayDirectory,config,Catalogue)
+	Filter = header['FILTER'].strip()
 	if Filter == 'none':
 		Filter = 'G'
-	CatalogueMags = np.array(CatalogueMags[Filter])[idx]
-	Catalogue = Catalogue[idx]
-	logging.info("Finished Catalogue Comparison of image " + File)
-	return X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM
-				
-def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging):
-	header = ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging)
-	result = SextractorPart(File,PipelineDirectory,DayDirectory,config)
-	result,status = AstrometryPart(File,PipelineDirectory,DayDirectory,config,header)
-	X, Y, Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM = CatalogComparison(File,PipelineDirectory,DayDirectory,config,header['FILTER'])
-	# ~ WriteOutput_Txt(File,DayDirectory,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
-	WriteOutput_Json(File,DayDirectory,header,config,X,Y,Detections, DetectionsMags, Catalogue, CatalogueMags, found, SNR, FWHM)
-	if number == n:
-		ComparacaoEntreImagens(...)
-	
-def FindMatchJson(obj,ImageData,scale): 
-	''' 
-	Function finds match between an object and all points in a Json file (bad, slow)
-	
-	INPUTS:
-	obj			 		-> Dict of all information from obj from json file					(str)
-	ImageData	 		-> Image data with objects of the same type as obj 			 		(dic)
-	scale 				-> pixel scale used for comparison						 			(float)
-	
-	RETURNS: 
-	key					-> number of object that is matched or False if no match			(CCDData)
-	
-	FILES CREATED:
-	NONE
-	''' 
-	L1=[obj['RaCalculated'],obj['DecCalculated']]
-	for key,point in ImageData.items():  #fixates a point an image to compares to all other points from different images
-		FWHM = max(np.mean(point['FWHM']),obj['FWHM']) 
-		L2=[np.mean(point['RaCalculated']),np.mean(point['DecCalculated'])]
-		distance=AngleDifferencePoints(L1,L2)
+	WriteOutput_Json(File,DayDirectory,header,config,Information,Catalogue[idx],np.array(CatalogueMags[Filter])[idx])
 
-		if float(distance) <= scale*FWHM/3600:
-			return key
-	
-	return False
-			
-def CompareImagesJsonSkyCoord(DayDirectory,Images,scale):
-	''' 
-	Function compares Json files to identify unique detections from each image with SkyCoord. Best version to use.
-	
-	INPUTS:
-	DayDirectory 		-> Directory of present day											(str)
-	Images		 		-> JsonFiles corresponding to detections		 			 		(list)
-	scale 				-> pixel scale used for comparison						 			(float)
-	
-	RETURNS: 
-	dic					-> dictionary with all unique sources and information for each		(CCDData)
-	
-	FILES CREATED:
-	NONE
-	''' 
-	if len(Images) == 1:
-		raise Exception('Not enough images to compare!')
-	dic = {}
-	Image = Images[0]
-	Ra1 = []
-	Dec1 = []
-	with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
-		ImageData = json.load(stream)
-	for count,obj in enumerate(ImageData):
-		dic[count] = {}
-		Ra1.append(obj['RaCalculated'])
-		Dec1.append(obj['DecCalculated'])  	
-		for i,key in enumerate(obj):
-			dic[count][key] = []
-			dic[count][key].append(float(obj[key]))
-	
-	for count, Image in enumerate(Images[1:]):
-		RaN = []
-		DecN = []
-		FWHM = []
-		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
-			ImageData = json.load(stream)
-		for obj in ImageData:
-			RaN.append(obj['RaCalculated'])
-			DecN.append(obj['DecCalculated'])
-			FWHM.append(obj['FWHM'])
-			
-		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Sources of all previous images
-		DetectionsN = SkyCoord(ra = Longitude(RaN, unit = u.deg), dec = np.array(DecN)*u.deg, frame = 'cirs')  		# Sources of image N
-		idx, d2d, d3d = match_coordinates_sky(DetectionsN, Detections1,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
-		mask = d3d < np.radians(scale*np.median(FWHM)/3600)
-		for i,found in enumerate(mask):
-			obj = ImageData[i]
-			if found:
-				for key in list(dic[idx[i]].keys()):
-					if key in obj:
-						dic[idx[i]][key].append(float(obj[key]))
-				
-			else:
-				Ra1.append(obj['RaCalculated'])
-				Dec1.append(obj['DecCalculated'])
-				dic[len(dic)] = {}
-				for j,key in enumerate(obj):
-					dic[len(dic)-1][key] = []
-					dic[len(dic)-1][key].append(float(obj[key]))
-	return dic
 
-def SeeVariation(dic_unicas,max_sep):
-	'''
-	Number -> number of object in dic
+	return
 	
-	
-	
-	'''
-	objects = {}
-	Number1,Ra1,Dec1,X1,Y1,FWHM1 = dic_unicas[1]['Number'],  dic_unicas[1]['Ra'],  dic_unicas[1]['Dec'],	dic_unicas[1]['X'],	dic_unicas[1]['Y'], dic_unicas[1]['FWHM']
-	for i in range(len(Number1)):
-		objects[i] = {}
-		objects[i]['image'] = [1]
-		objects[i]['Number'] = [Number1[i]]
-		objects[i]['Ra'] = [Ra1[i]]
-		objects[i]['Dec'] = [Dec1[i]]
-		objects[i]['X'] = [X1[i]]
-		objects[i]['Y'] = [Y1[i]]
-		objects[i]['FWHM'] = [FWHM1[i]]
-		
-	for image in range(len(dic_unicas)-1):
-		Number2,Ra2,Dec2,X2,Y2,FWHM2 = dic_unicas[image+2]['Number'],dic_unicas[image+2]['Ra'],dic_unicas[image+2]['Dec'],dic_unicas[image+2]['X'],dic_unicas[image+2]['Y'],dic_unicas[image+2]['FWHM']
-			
-		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
-		Detections2 = SkyCoord(ra = Longitude(Ra2, unit = u.deg), dec = np.array(Dec2)*u.deg, frame = 'cirs')  		# Sources of image N+1
-		
-		n = 1
-		while True:
-			idx, d2d, d3d = match_coordinates_sky(Detections2, Detections1,nthneighbor=n,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
-			mask = d3d < max_sep
-			n+=1
-			if sum(mask) == 0:
-				break
-				
-			for count,found in enumerate(mask):
-				if found:
-					if image+2 in objects[idx[count]]['image']:
-						nnew = len(objects)
-						objects[nnew] = {}
-						objects[nnew]['image']  =  objects[idx[count]]['image'][:-1]
-						objects[nnew]['Number'] =  objects[idx[count]]['Number'][:-1]
-						objects[nnew]['Ra']     =  objects[idx[count]]['Ra'][:-1]
-						objects[nnew]['Dec']    =  objects[idx[count]]['Dec'][:-1]
-						objects[nnew]['X']   	=  objects[idx[count]]['X'][:-1]
-						objects[nnew]['Y']    	=  objects[idx[count]]['Y'][:-1]
-						objects[nnew]['FWHM']  	=  objects[idx[count]]['FWHM'][:-1]
-						
-						objects[nnew]['image'].append(image+2)
-						objects[nnew]['Number'].append(Number2[count])
-						objects[nnew]['Ra'].append(Ra2[count])
-						objects[nnew]['Dec'].append(Dec2[count])
-						objects[nnew]['X'].append(X2[count])
-						objects[nnew]['Y'].append(Y2[count])
-						objects[nnew]['FWHM'].append(FWHM2[count])
-						
-					else:
-						objects[idx[count]]['image'].append(image+2)
-						objects[idx[count]]['Number'].append(Number2[count])
-						objects[idx[count]]['Ra'].append(Ra2[count])
-						objects[idx[count]]['Dec'].append(Dec2[count])
-						objects[idx[count]]['X'].append(X2[count])
-						objects[idx[count]]['Y'].append(Y2[count])
-						objects[idx[count]]['FWHM'].append(FWHM2[count])
-						
-				else:
-					nnew = len(objects)
-					objects[nnew] = {}
-					objects[nnew]['image'] 		= [image+2]
-					objects[nnew]['Number'] 	= [Number2[count]]
-					objects[nnew]['Ra'] 		= [Ra2[count]]
-					objects[nnew]['Dec']		= [Dec2[count]]
-					objects[nnew]['X'] 			= [X2[count]]
-					objects[nnew]['Y'] 			= [Y2[count]]
-					objects[nnew]['FWHM']		= [FWHM2[count]]
-				
-			
-		Ra1  = []
-		Dec1 = []
-		for i in range(len(objects)):
-			Ra1.append(objects[i]['Ra'][-1])
-			Dec1.append(objects[i]['Dec'][-1])
-	
-	return objects
-	
-def MakeDicUnique(dic):
-	dic_unicas = {}
-	for i,key in enumerate(dic):
-		if len(dic[key]['image']) == 1:
-			n_image = int(dic[key]['image'][0])
-			
-			if n_image in dic_unicas:
-				dic_unicas[n_image]['image'].append(n_image)
-				dic_unicas[n_image]['Number'].append(key)
-				dic_unicas[n_image]['Ra'].append(dic[key]['RaCalculated'][0])
-				dic_unicas[n_image]['Dec'].append(dic[key]['DecCalculated'][0])
-				dic_unicas[n_image]['X'].append(dic[key]['Xdetect'][0])
-				dic_unicas[n_image]['Y'].append(dic[key]['Ydetect'][0])
-				dic_unicas[n_image]['FWHM'].append(dic[key]['FWHM'][0])
-				
-			else:
-				dic_unicas[n_image] = {}
-				dic_unicas[n_image]['image'] = [n_image]
-				dic_unicas[n_image]['Number'] = [key]
-				dic_unicas[n_image]['Ra'] = dic[key]['RaCalculated']
-				dic_unicas[n_image]['Dec'] = dic[key]['DecCalculated']
-				dic_unicas[n_image]['X'] = dic[key]['Xdetect']
-				dic_unicas[n_image]['Y'] = dic[key]['Ydetect']
-				dic_unicas[n_image]['FWHM'] = dic[key]['FWHM']
-	return dic_unicas
-	
-def CleanObjects(Objects,config):
-	'''
-	Cleans Object dic to only output true movement of objects
-	
-	INPUTS:
-	Objects			-> Dictionary with information about sets of objects   			(dict)
-	
-	OUTPUTS:
-	Objects			-> Clean Dictionary with information about sets of objects  	(dict)
-	
-	'''
-	
-	for obj in list(Objects.keys()):
-		# STEP1: Removes objects with less than 3 detections
-		if len(Objects[obj]['Ra']) < 3:
-			del Objects[obj]
-			continue
-		
-		
-		
-		d,dV = [],[] 
-		for j in range(len(Objects[obj]['image'])-1):
-			image1,image2 = Objects[obj]['image'][j],Objects[obj]['image'][j+1]
-			X1,X2 = Objects[obj]['X'][j],Objects[obj]['X'][j+1]
-			Y1,Y2 = Objects[obj]['Y'][j],Objects[obj]['Y'][j+1]
-			d.append(np.sqrt((X2-X1)**2 + (Y2-Y1)**2)/(image2-image1))
-			dV.append(np.arctan2(Y2-Y1,X2-X1))
-			
-		# STEP2: Removes sets with varying distance between consecutive points	
-		if config['CheckDistance']:	
-			if abs((max(d)-min(d))/max(d)) > float(config['percent_distance']):
-				del Objects[obj]
-				continue
-		#STEP3: Removes sets with varying direction
-		if config['CheckDirection']:	
-			if abs(max(dV)-min(dV)) > np.radians(float(config['angle_difference'])):
-				del Objects[obj]
-				continue
-		print('----------------')
-		print('X: ',X1)
-		print('Y: ',Y1)
-		print('FWHM: ',Objects[obj]['FWHM'][j])
-		print(d)
-		print(abs((max(d)-min(d))/max(d)))
-		print(np.degrees(dV))
-		print(np.degrees(abs(max(dV)-min(dV))))
-			
-	return Objects
-		
 #################################################################################################################################################################
 
 # In Development
@@ -2632,24 +2591,41 @@ def CompareImagesTXT(Images):
 			else:
 				dic[len(dic)] = Valor
 
-def ldac2fits (cat_ldac, cat_fits):
+ 
+##################################################################################################################################################################
 
-    """This function converts the LDAC binary FITS table from SExtractor
-    to a common binary FITS table (that can be read by Astrometry.net) """
+# In Development
 
-    # read input table and write out primary header and 2nd extension
-    columns = []
-    with fits.open(cat_ldac, memmap=True) as hdulist:
+def CompareImagesTXT(Images):
+	if len(Images) == 1:
+		raise Exception('Not enough images to compare!')
+	dic = {}
+	Image = Images[0]
+	OutputFile = f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}"
+	Data = SPADEFunctions.ReadOutput(OutputFile)
+	for obj in range(len(Data['X'])):
+		dic[obj] = {}
+		dic['Image'] = [1]
+		keys = Data.keys()
+		for count, key in enumerate(keys):
+			dic[obj][key] = [Data[key][obj]]
+	
+	
+	for count, Image in enumerate(Images[1:-1]):
+		OutputFile = f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}"
+		Data = SPADEFunctions.ReadOutput(OutputFile)
+		time.sleep(500)
+		
+		for i in range(len(dic)):
+			obj = dic[i]
+			Valor = FindMatch(obj,Data) # Devolve None/False, ou  informacao Objeto 
+			if Valor:
+				for count, key in enumerate(dic[obj]):
+					dic[obj][key] = dic[obj][key].append(Valor[key])
+			else:
+				dic[len(dic)] = Valor
 
-        # delete VIGNET column
-        hdulist[2].data = drop_fields(hdulist[2].data, 'VIGNET')
 
-        # and write regular fits file
-        hdulist_new = fits.HDUList([hdulist[0], hdulist[2]])
-        hdulist_new.writeto(cat_fits, overwrite=True)
-        hdulist_new.close()
-
-    return
     
 
 
@@ -2778,13 +2754,6 @@ def CleanObjectsOld(Objects,config):
 			if abs(max(dV)-min(dV)) > np.radians(float(config['angle_difference'])):
 				del Objects[obj]
 				continue
-			else:
-				print('----------------')
-				print('X: ',X1)
-				print('Y: ',Y1)
-				print('FWHM: ',Objects[obj]['FWHM'][j])
-				print(dV)
-				print(abs(max(dV)-min(dV)))
 			
 	return Objects
 	
@@ -2893,3 +2862,233 @@ def CompareImagesJsonSkyCoordOld(DayDirectory,Images,scale):
 					dic[len(dic)-1][key] = []
 					dic[len(dic)-1][key].append(float(obj[key]))
 	return dic
+
+def sextractorOld(File,PipelineDirectory,DayDirectory,SexConfig,cattype,VIGNET=None,fit_psf=False):
+	''' 
+	Function to run sextractor on an image and output catalogue file
+	
+	INPUTS:
+	Base 				-> image directory to give to sextractor						(str)
+	PipelineDirectory 	-> directory of the Pipeline folder								(str)
+	DayDirectory 		-> directory of the present day									(str)
+	SexConfig 			-> Configuration catalog used for Sextractor					(str)
+	cattype 			-> Type of output catalog										(str)
+	VINGET 				-> Size of array to save from each image, for PSFEX				(int)
+	fit_psf 			-> Boolean to check wheter to use psf for photometry			(int)
+	
+	RETURNS:
+	result				-> result sextractor software									(str)
+	
+	FILES CREATED:
+	Writes a sextractor catalog at the day Sextractor folder with the same name as the original image
+	
+	
+	'''
+	Base = File.split('.')[0]
+	FileBase = f"{DayDirectory}/SextractorCatalogue/{Base}"
+	SexFile = f"{DayDirectory}/ReducedImages/{File}"
+	SexDir = f"{PipelineDirectory}/Files/Sextractor/" 				# The sextractor directory is inside the pipeline folder
+	
+	if fit_psf:
+		FileBase = FileBase + '_psf'
+	
+	if cattype == 'FITS_1.0':
+		catout = FileBase +'.cat'
+	elif cattype == 'FITS_LDAC':
+		catout = FileBase +'LDAC.cat'
+	else:
+		raise Exception('Not an acceptable catalog type')
+	
+	
+	cmd = {}		
+	cmd['source-extractor'] = SexFile								# Chooses the image directory as the image to analyse			
+	cmd['-c'] = SexDir + SexConfig									# Chooses the sextractor catalogue as the default in the pipeline folder
+	cmd['-CATALOG_NAME'] =  catout									# Chooses the catalogue output as the catout given in the function
+	cmd['-FILTER_NAME'] = SexDir + 'default.conv'
+	cmd['-WEIGHT_IMAGE'] = SexDir + 'weight.fits'
+	cmd['-CATALOG_TYPE'] = cattype
+	cmd['-PARAMETERS_NAME'] = SexDir + 'default.param'				# Chooses the needed files from the sextractor folder
+
+	
+	if fit_psf:
+		cmd['-PSF_NAME'] = psf_out = FileBase.replace('_psf', 'LDAC_psf.fits')
+		with open(SexDir + 'default.param', 'a') as myfile:
+			myfile.write('MAG_PSF\n')
+		
+	if VIGNET != None:
+		with open(SexDir + 'default.param', 'a') as myfile:
+			myfile.write('VIGNET{}\n'.format((VIGNET,VIGNET)))
+	
+	
+	list_cmd = list(itertools.chain.from_iterable(list(cmd.items()))) # Compacts the cmd dictionary created so it can be run through terminal
+	result = subprocess.run(list_cmd, capture_output=True) 			  # Runs the program in terminal and outputs the result and status (0 = good, 255 = bad)
+	status = result.returncode
+	
+	if VIGNET != None:
+		with open(SexDir + 'default.param', '+r') as myfile:
+			lines = myfile.readlines()
+			myfile.seek(0)
+			myfile.truncate()
+			myfile.writelines(lines[:-1])
+	
+	if fit_psf:
+		with open(SexDir + 'default.param', '+r') as myfile:
+			lines = myfile.readlines()
+			myfile.seek(0)
+			myfile.truncate()
+			myfile.writelines(lines[:-1])
+	
+			
+	return result
+
+def SeeVariationOld2(dic_unicas,max_sep):
+	'''
+	Number -> number of object in dic
+	
+	
+	
+	'''
+	objects = {}
+	Number1,Ra1,Dec1,X1,Y1,FWHM1 = dic_unicas[1]['Number'],  dic_unicas[1]['Ra'],  dic_unicas[1]['Dec'],	dic_unicas[1]['X'],	dic_unicas[1]['Y'], dic_unicas[1]['FWHM']
+	for i in range(len(Number1)):
+		objects[i] = {}
+		objects[i]['image'] = [1]
+		objects[i]['Number'] = [Number1[i]]
+		objects[i]['Ra'] = [Ra1[i]]
+		objects[i]['Dec'] = [Dec1[i]]
+		objects[i]['X'] = [X1[i]]
+		objects[i]['Y'] = [Y1[i]]
+		objects[i]['FWHM'] = [FWHM1[i]]
+
+	for image in range(len(dic_unicas)-1):
+		Number2,Ra2,Dec2,X2,Y2,FWHM2 = dic_unicas[image+2]['Number'],dic_unicas[image+2]['Ra'],dic_unicas[image+2]['Dec'],dic_unicas[image+2]['X'],dic_unicas[image+2]['Y'],dic_unicas[image+2]['FWHM']
+			
+		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
+		Detections2 = SkyCoord(ra = Longitude(Ra2, unit = u.deg), dec = np.array(Dec2)*u.deg, frame = 'cirs')  		# Sources of image N+1
+		
+		n = 1
+		while True:
+			idx, d2d, d3d = match_coordinates_sky(Detections2, Detections1,nthneighbor=n,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
+			mask = d3d < max_sep
+			n+=1
+			if sum(mask) == 0:
+				break
+				
+			for count,found in enumerate(mask):
+				if found:
+					if image+2 in objects[idx[count]]['image']:
+						nnew = len(objects)
+						objects[nnew] = {}
+						objects[nnew]['image']  =  objects[idx[count]]['image'][:-1]
+						objects[nnew]['Number'] =  objects[idx[count]]['Number'][:-1]
+						objects[nnew]['Ra']     =  objects[idx[count]]['Ra'][:-1]
+						objects[nnew]['Dec']    =  objects[idx[count]]['Dec'][:-1]
+						objects[nnew]['X']   	=  objects[idx[count]]['X'][:-1]
+						objects[nnew]['Y']    	=  objects[idx[count]]['Y'][:-1]
+						objects[nnew]['FWHM']  	=  objects[idx[count]]['FWHM'][:-1]
+						
+						objects[nnew]['image'].append(image+2)
+						objects[nnew]['Number'].append(Number2[count])
+						objects[nnew]['Ra'].append(Ra2[count])
+						objects[nnew]['Dec'].append(Dec2[count])
+						objects[nnew]['X'].append(X2[count])
+						objects[nnew]['Y'].append(Y2[count])
+						objects[nnew]['FWHM'].append(FWHM2[count])
+						
+					else:
+						objects[idx[count]]['image'].append(image+2)
+						objects[idx[count]]['Number'].append(Number2[count])
+						objects[idx[count]]['Ra'].append(Ra2[count])
+						objects[idx[count]]['Dec'].append(Dec2[count])
+						objects[idx[count]]['X'].append(X2[count])
+						objects[idx[count]]['Y'].append(Y2[count])
+						objects[idx[count]]['FWHM'].append(FWHM2[count])
+						
+				else:
+					nnew = len(objects)
+					objects[nnew] = {}
+					objects[nnew]['image'] 		= [image+2]
+					objects[nnew]['Number'] 	= [Number2[count]]
+					objects[nnew]['Ra'] 		= [Ra2[count]]
+					objects[nnew]['Dec']		= [Dec2[count]]
+					objects[nnew]['X'] 			= [X2[count]]
+					objects[nnew]['Y'] 			= [Y2[count]]
+					objects[nnew]['FWHM']		= [FWHM2[count]]
+				
+			
+		Ra1  = []
+		Dec1 = []
+		for i in range(len(objects)):
+			Ra1.append(objects[i]['Ra'][-1])
+			Dec1.append(objects[i]['Dec'][-1])
+	
+	return objects
+
+def SextractorPartOld(File,PipelineDirectory,DayDirectory,config):
+	'''
+	Function that processes all sextractor Steps. 
+	Firstly it runs sextractor twice, in order to produce a FITS_LDAC (for psfex) and a FITS_1.0 (for astrometry.net). Detections too close to the borders are removed.
+	Secondly it runs PSFEX to obtain the average PSF in the image, after removing all detections with FWHM=0.
+	Lastly, it runs sextractor again with the PSF model obtained, in order to improve photometry on sources.
+	
+	INPUTS:
+	Base 				-> File name without path and ending 						(str)
+	PipelineDirectory 	-> Directory of Pipeline folder								(str)
+	DayDirectory 		-> Directory of present day									(str)
+	config				-> Configuration Dictionary									(dic)
+	
+	RETURNS:
+	No returns
+	
+	FILES CREATED (SextractorCatalogue):
+	Base.cat 			-> Sextractor catalog with FITS_1.0 types					(fits)
+	BaseLDAC.cat 		-> Sextractor catalog with FITS_LDAC types					(FITS_LDAC)
+	BaseLDAC_psf.fits	-> PSF model obtained with PSFEX							(Psf file)
+	Base_out.cat		-> Ouput file with PSFEX									(txt)
+	Base_psfLDAC.cat	-> Sextractor catalog obtained using PSF model				(Final File)
+	'''
+	A = time.time()
+	Base = File.split('.')[0]
+	FileBase = f"{DayDirectory}/SextractorCatalogue/{Base}"
+	VIGNET = int(config['VIGNET'])
+	logging.info("Started Sextractor Pass of image " + File)
+	
+	# First Sextractor pass: creates 2 catalogs: one in Fits_1.0 format for use in astrometry.net and 1 in Fits_LDAC for use in PSFEX, then sources too close to the
+	# border are elliminated. The threshold for the distance is the VIGNET parameter given in the configuration file
+	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],1)
+	if config['VERBOSE']:
+		print(result)
+	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],2)
+	if config['VERBOSE']:
+		print(result)
+	RemoveBorders(FileBase +'LDAC.cat',int(config['VIGNET']))
+	RemoveBorders(FileBase +'.cat',int(config['VIGNET']))	
+	
+	
+	#Secondly, PSFEX is run with the sextractor catalog written before.
+	CatIn 	= f"{FileBase}LDAC.cat"
+	CatOut 	= f"{FileBase}_out.cat"
+	ConfigFile =  f"{PipelineDirectory}/Files/Sextractor/{config['PSFexConfig']}"
+	Rem0FWHM(CatIn)
+	result, status = psfex(CatIn,CatOut,ConfigFile,VIGNET)
+	
+	psf_in = CatIn.replace('.cat', '.psf')
+	psf_out = CatIn.replace('.cat', '_psf.fits')
+	os.rename (psf_in, psf_out)
+	
+	
+	#Lastly, Sextractor is run again with the PSF model, in order to improve photometry
+	resultado = sextractor(Base,PipelineDirectory,DayDirectory,config['SexConfig'],3)
+	logging.info("Finished Sextractor Pass of " + File)
+	
+	if config['SaveTimes']:
+		Tempo = time.time() - A
+		with open('/home/luis/Desktop/Codigos/PipelineTrabalhar/Tempos','a') as tempos:
+			linha = f'{Tempo:8}\n'
+			tempos.write(linha)
+	
+	
+	
+	
+	
+	return resultado
