@@ -32,7 +32,7 @@ DesenhoPrecisao   	= False
 DesenhoFotometria 	= False
 DesenhoFotometria2	= False
 VerMediaTempos 		= True
-FicheiroTempos = '/home/luis/Desktop/ValoresTempos/Astrometry/VersaoAntiga/Defesa(10x) - FullTime:49.458'
+FicheiroTempos = '/home/luis/Desktop/ValoresTempos/Detecao/5Sigma'
 
 
 

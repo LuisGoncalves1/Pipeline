@@ -7,7 +7,7 @@ Height 910
 
 LOGGER 10
 Catalog UCAC5					# Catalog to be used, the options implemented are: Tycho2 (tycho2.dat file), UCAC4 (UCAC4 folder), UCAC5 (UCAC5 folder), Hipparchos (hipparcos.fits files)  
-MagLim 15
+MagLim 13
 
 # Reduction Process
 DARK False					# Decides if applies Dark to images
@@ -18,10 +18,10 @@ Filters False					# Decides if there are filters
 CrossTalk True					# Decides if applies CrossTalk Correction
 alfa1 0.015					# Value for CrossTalk correction according to : paper
 alfa2 0.008					# Value for CrossTalk correction
-CosmicRays True				# Decides if removes CosmicRays 
+CosmicRays False				# Decides if removes CosmicRays 
 Background True				# Decides if applies BackGround Correction
 Astrometry True				# Decides if runs Astrometry 
-
+SaveTimes True					# Saves time taken for each step in a separate file
 
 # Visual
 GRAPH False					# If True draws image
@@ -29,6 +29,7 @@ GRAPH False					# If True draws image
 
 # Sex + PsFex
 SexConfig defaultDEFESA.sex			# Configuration file for Sextractor
+Photometry False				# Decides whether to perform photometry with PSF or not
 PSFexConfig defaultBRUNO.psfex		# Configuration file for PSFex
 VIGNET 45
 
@@ -40,11 +41,12 @@ scale-units app				# untis for image scale estimates
 radius 3					# estimate for radius of image in degrees (diagonal of image)
 max_sep 2					# units of FWHM for comparison between stars found and catalog
 BrightParameter MAG_ISOCOR			# Parameter to order
-NSources 200					# number of sources for plate solving (+ gives first values (magnitude), - gives last values (flux))
+NSources 500					# number of sources for plate solving (+ gives first values (magnitude), - gives last values (flux))
 
 # Movement Detection
+VariationInImage 130				# Max variation in image in arcseconds
 CheckDistance True
-percent_distance 0.1				# Percentage for difference in distance allowed from image to image
+percent_distance 0.1				# Percentage for difference in distance allowed from image to image (1=100%)
 CheckDirection True
 angle_difference 8				# Difference in degrees between direction of consecutive images, in degrees
 
