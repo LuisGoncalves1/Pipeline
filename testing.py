@@ -81,7 +81,7 @@ def Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,image,sat_xy_
 	return True
 
 
-#-----------------Probabilistic Hough Transform--------------
+#-----------------Probabilistic Hough Transform--------------------------------------------------------------
 
 '''
 The HoughLineP function in OpenCV performs probabilistic Hough line detection, which finds line segments in an image by considering only a subset of
@@ -173,84 +173,167 @@ def houghlines():
 	cv2.destroyAllWindows()
 
 
-#---------------------------- Grafico ----------------------------------
+#---------------------------- Grafico --------------------------------------------------------------------
 
 
-TLE_file=f'TLE Catalog-2022417.json'
+TLE_file=f'TLE Catalog-2023228.json'
+WindowFile=['PAER_SURV_4_260789_230228_080700-051142_scan102_01_RaDec_Window','PAER_SURV_4_260789_230228_080700-051142_scan102_02_RaDec_Window',
+'PAER_SURV_4_260789_230228_080700-051142_scan102_03_RaDec_Window','PAER_SURV_4_260789_230228_080700-051142_scan102_04_RaDec_Window']
 
-def convert_degrees_to_hms(degrees):
-    total_seconds = degrees * 3600  # 1 degree = 3600 seconds (60 minutes * 60 seconds)
-    hours = int(total_seconds // 3600)
-    minutes = int((total_seconds % 3600) // 60)
-    seconds = int(total_seconds % 60)
-    hms=str(hours)+':'+str(minutes)+':'+str(seconds)
-    return hms
-    
-def decdeg2dms(dd):
-    mult = -1 if dd < 0 else 1
-    mnt,sec = divmod(abs(dd)*3600, 60)
-    deg,mnt = divmod(mnt, 60)
-    dms=str(round(mult*deg))+':'+str(round(mult*mnt))+':'+str(float("{:.1f}".format(mult*sec)))
-    return dms
+def HMS2deg(RA):
+	''' 
+	Function created to transform HMS to degrees
+	
+	INPUTS:
+	Ra 					-> Ra value in HMS												(str)
+	
+	OUTPUTS:
+	degrees				-> degrees value corresponding to input							(float)
+	
+	FILES CREATED:
+	NONE
+	'''
+	
+	degrees = []
+	for value in RA:
+		H = float(value[1:2])
+		M = float(value[3:5])
+		S = float(value[6:8])
+		degree = 360/24 * H + 360/(24*60) * M + 360/(24*60*60) * S
+		degrees.append(degree)
+		
+	return degrees
 
+def DMS2deg(DEC):
+	''' 
+	Function created to transform DMS to degrees
+	
+	INPUTS:
+	Dec 				-> Dec value in DMS												(str)
+	
+	OUTPUTS:
+	degrees				-> degrees value corresponding to input							(float)
+	
+	FILES CREATED:
+	NONE
+	'''
+	
+	degrees = []
+	for value in DEC:
+		D = float(value[0:2])
+		M = float(value[3:5])
+		S = float(value[6:8])
+		degree = D + M/60 + S/3600
+		degrees.append(degree)
+		
+	return degrees
+		
+def convert_degrees_to_hours_minutes(degrees):
+    total_minutes = degrees * 4  # Since 15 degrees = 1 hour, 1 degree = 4 minutes
+    hours = int(total_minutes // 60)
+    minutes = int(total_minutes % 60)
+    string=str(hours)+':00'
+    return string
 
 def TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory):
-
-	
-	with open(f'{TLE_Directory}/{TLE_file}') as user_file:
-		file_contents = json.load(user_file)
 		
+	file_contents=SPADEFunctions.TLE_parameters(TLE_Directory,TLE_file)
 	ts = load.timescale()
-	t = ts.utc(2023,2,28,20,20,12)
-		
+	t_inicial=ts.utc(2023,2,28,19,59)
+	t_final=ts.utc(2023,2,28,20,21,49) 
+
 	Ra=[]
 	Dec=[]	
-	Ra_ticks=[]
-	Dec_ticks=[]
+
 	for i in file_contents:
-			
+
 			line1=i['tle_1']
 			line2=i['tle_2']
-			nome='n'
-	
+			nome='n' #o nome não interessa
 			satellite = EarthSatellite(line1, line2, nome, ts)
 
 			bluffton = wgs84.latlon(float(config['Latitude']), float(config['Longitude']),float(config['Height']))
 			
 			difference = satellite - bluffton 
+			
+			passo=(t_final-t_inicial)/60
+			for t in np.arange(t_inicial,t_final,passo):
+			
+				topocentric = difference.at(t)
 		
-			topocentric = difference.at(t)
+				ra, dec, distance = topocentric.radec()
+				
+				ra=math.degrees(ra.radians)
+				Ra.append(ra)
+		
+				dec=math.degrees(dec.radians)
+				Dec.append(dec)
+
+
+	plt.scatter(Ra, Dec,alpha=0.5,s=5)
 	
-			ra, dec, distance = topocentric.radec()
+
+	# ra_target=['04 23 47.00','04 23 47.00','04 23 47.00','04 23 47.00','04 23 47.00','08 07 00.00','08 07 00.00','08 07 00.00','08 07 00.00']
+	# dec_target=['-3 13 45.0','+6 55 00.0','-0 41 33.0','+1 50 37.0','-8 18 07.0','-7 43 53.0','+4 57 03.0','-5 11 42.0','+2 24 52.0']
+	# ra_degrees= HMS2deg(ra_target) 
+	# dec_degrees= DMS2deg(dec_target)
+	#plt.scatter(ra_degrees, dec_degrees,marker='s',s=40)
+	
+	
+	files=os.listdir(f"{DayDirectory}/TLE")
+	
+	for ficheiro in files:
+		ra_window=[]
+		dec_window=[]
+		if ficheiro[-12:] == 'RaDec_Window':
+			A=fits.open(f'{DayDirectory}/TLE/{ficheiro}')
+			for i in A[1].data['RA']:
+				ra_window.append(float(i))
+			for i in A[1].data['DEC']:
+				dec_window.append(float(i))
 			
-			ra=math.degrees(ra.radians)
-			hms=convert_degrees_to_hms(ra)
-			Ra.append(ra)
-			Ra_ticks.append(hms)
+			min_x = min(ra_window)
+			max_x = max(ra_window)
+			min_y = min(dec_window)
+			max_y = max(dec_window)
+
+			square_x = [min_x, max_x, max_x, min_x, min_x]  # Vertices of the square
+			square_y = [min_y, min_y, max_y, max_y, min_y]
 			
-			dec=math.degrees(dec.radians)
-			dms=decdeg2dms(dec)
-			Dec.append(dec)
-			Dec_ticks.append(dms)
+			plt.plot(square_x, square_y, 'r-') 
+	
+	# ra_window=[]
+	# dec_window=[]
+	# for ficheiro in WindowFile:
+		# A=fits.open(f'{TLE_Directory}/{ficheiro}')
+		# ra_window.append(float(A[1].data['RA']))
+		# dec_window.append(float(A[1].data['DEC']))
+	
+	# plt.scatter(ra_degrees, dec_degrees,marker='s',s=40)
+	
 
 	
-	return Ra,Dec,Ra_ticks,Dec_ticks
 
-import matplotlib.dates as mdates
-from datetime import datetime
-import matplotlib.ticker as ticker
-
-Ra,Dec,Ra_ticks,Dec_ticks,=TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory)
-plt.scatter(Ra, Dec,alpha=0.5)
-
-ax = plt.gca()
-plt.xlabel('Ra (hms) ')
-#plt.xticks(Ra, Ra_ticks)
-plt.ylabel('Dec (dms)')
-ax.yaxis.set_major_locator(ticker.MultipleLocator(base=2))
-plt.yticks(Dec, Dec_ticks)
-plt.xlim([0, 359])
-plt.ylim([-20, 20])
-plt.show()
+	
 
 
+	plt.xlabel('Ra (Hours) ',fontsize=12)
+	plt.ylabel('Dec (Degrees)',fontsize=12)
+
+	angle=[0,15,30,45,60,75,90,105,120,135,150,165,180,195,210,225,240,255,270,285,300,315,330,345,360]
+	x=[]
+	for i in angle:
+		hms=convert_degrees_to_hours_minutes(i)
+		x.append(hms)
+	
+	plt.xticks(angle, x)
+	
+	plt.xticks(angle, x)
+
+	plt.xlim([0, 359])
+	plt.ylim([-20, 20])
+	plt.show()
+TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory)
+
+WindowFile=['PAER_SURV_4_260789_230228_080700-051142_scan102_01_RaDec_Window','PAER_SURV_4_260789_230228_080700-051142_scan102_02_RaDec_Window',
+'PAER_SURV_4_260789_230228_080700-051142_scan102_03_RaDec_Window','PAER_SURV_4_260789_230228_080700-051142_scan102_04_RaDec_Window']
