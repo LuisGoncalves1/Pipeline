@@ -16,6 +16,7 @@ from skyfield.api import EarthSatellite
 from skyfield.api import load, wgs84,utc
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
+import cv2
 
 PipelineDirectory = os.getcwd()
 day = "2022-03-20"
@@ -25,7 +26,6 @@ config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" 
 TLE_Directory = f"{DayDirectory}/TLE"
 FileXY=f'{TLE_Directory}/XY_window.cat'
 
-#SPADEFunctions.Run_TLE_Code(config,PipelineDirectory,DayDirectory,FileXY,TLE_Directory)
 	
 def Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,image,sat_xy_coordinates):
 	
@@ -81,8 +81,9 @@ def Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,image,sat_xy_
 	return True
 
 
-#-----------------Probabilistic Hough Transform--------------------------------------------------------------
-
+#--------------------------------------------------------------------------------------------------------
+#----------------------------Probabilistic Hough Transform ----------------------------------------------
+#--------------------------------------------------------------------------------------------------------
 '''
 The HoughLineP function in OpenCV performs probabilistic Hough line detection, which finds line segments in an image by considering only a subset of
 the possible parameter space, rather than the entire space. It works as follows:
@@ -127,34 +128,131 @@ maxLineGap - This is the maximum gap allowed between segments to be merged into 
 			It is specified in pixels.
 '''
 
+from skimage import io, filters, morphology
+
+#binarization of images
+def adaptiveThresh(image):
+	
+	thresh_gaussian = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV,11, 13)
+	
+	thresh_mean = cv2.adaptiveThreshold(image,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,2)
+	
+	_, thresh_otsu = cv2.threshold(image,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+	
+	
+	thresh_gaussian,thresh_mean,thresh_otsu=adaptiveThresh(image)
+	
+	cv2.namedWindow('Gaussian', cv2.WINDOW_NORMAL)  
+	cv2.imshow('Gaussian', thresh_gaussian)
+	screen_width, screen_height = 1090, 1080  
+	cv2.resizeWindow('Gaussian', screen_width, screen_height)
+	cv2.waitKey(0)
+	cv2.destroyAllWindows()
+	
+	
+	cv2.namedWindow('Mean', cv2.WINDOW_NORMAL)  
+	cv2.imshow('Mean', thresh_mean)
+	screen_width, screen_height = 1090, 1080  
+	cv2.resizeWindow('Mean', screen_width, screen_height)
+	cv2.waitKey(0)
+	cv2.destroyAllWindows()
+	
+	
+	
+	cv2.namedWindow('otsu', cv2.WINDOW_NORMAL)  
+	cv2.imshow('otsu', thresh_otsu)
+	screen_width, screen_height = 1090, 1080  
+	cv2.resizeWindow('otsu', screen_width, screen_height)
+	cv2.waitKey(0)
+	cv2.destroyAllWindows()
+		
+def binarization(image):
+	# Create a CLAHE object
+	clahe = cv2.createCLAHE(clipLimit=5, tileGridSize=(20, 20))  # Adjust the parameters as needed
+	
+	# Apply CLAHE to the image
+	enhanced_image = clahe.apply(image)
+	
+	#Display the original and enhanced images
+	# cv2.namedWindow('enhanced_image', cv2.WINDOW_NORMAL)  
+	# cv2.imshow('enhanced_image', enhanced_image)
+	# screen_width, screen_height = 1090, 1080  
+	# cv2.resizeWindow('enhanced_image', screen_width, screen_height)
+	# cv2.waitKey(0)
+	# cv2.destroyAllWindows()
+	
+
+	gaussian_filter = cv2.GaussianBlur(enhanced_image, (3, 3), 0)
+
+	threshold_value, binary_image = cv2.threshold(gaussian_filter, 50, 255, cv2.THRESH_BINARY)
+	
+	
+	
+	# perform connected component analysis
+	num_labels, labels, stats, centroids = cv2.connectedcomponentswithstats(binary_image)
+	
+	# create an array to store the filtered image
+	filtered_image = np.zeros_like(binary_image)
+	
+	# iterate over the connected components
+	for label in range(1, num_labels):
+	    # check the area of the component
+	    area = stats[label, cv2.cc_stat_area]
+	    # filter out small objects
+	    if area >= 60:
+	        # add the component to the filtered image
+	        filtered_image[labels == label] = 255
+	        
+	        
+	fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+	axs[0].imshow(image, cmap='gray')
+	axs[0].set_title('Original Image')
+	axs[0].axis('off')
+	axs[1].imshow(enhanced_image, cmap='gray')
+	axs[1].set_title('Enhanced Image')
+	axs[1].axis('off')
+	plt.show()
+	        
+	return enhanced_image,filtered_image
+	
+
+	# cv2.namedWindow('Gaussian', cv2.WINDOW_NORMAL)  
+	# cv2.imshow('Gaussian', filtered_image)
+	# screen_width, screen_height = 1090, 1080  
+	# cv2.resizeWindow('Gaussian', screen_width, screen_height)
+	# cv2.waitKey(0)
+	# cv2.destroyAllWindows()
+
 def houghlines():
 
-	#import cv2
 	image='PAER_SURV_4_260753_230228_042347+065500_scan017_01.fit'
 	image = CCDData.read(f"{image}", unit = 'adu') 
-	img_uint8 = np.uint8(image.data/256) #convert uint16 to uint8
+	image = np.uint8(image.data/256) #convert uint16 to uint8
+	
+	enhanced_image,binary_image=binarization(image)
 	
 	# Perform edge detection
 	#We need two threshold values, minVal and maxVal. Any edges with intensity gradient more than maxVal are sure to be edges 
 	#and those below minVal are sure to be non-edges, so discarded.
-	T_lower=15  #Lower threshold value in Hysteresis Thresholding
-	T_upper=17	#Upper threshold value in Hysteresis Thresholding
+	T_lower=100 #Lower threshold value in Hysteresis Thresholding
+	T_upper=200	#Upper threshold value in Hysteresis Thresholding
 	
-	aperture_size=7 #Aperture size of the Sobel filter.
+	aperture_size=3 #Aperture size of the Sobel filter.
 	#The default value is 3 and its value should be odd between 3 and 7. 
 	#You can increase the Aperture size when you want to detect more detailed features.
-	edges = cv2.Canny(img_uint8, T_lower,T_upper, aperture_size)
+	edges = cv2.Canny(binary_image, T_lower,T_upper, aperture_size)
 	
 	
-	# cv2.imshow('Canny Edges', edges)
+	# cv2.namedWindow('edge', cv2.WINDOW_NORMAL)  
+	# cv2.imshow('edge', edges)
+	# screen_width, screen_height = 1090, 1080  
+	# cv2.resizeWindow('edge', screen_width, screen_height)
 	# cv2.waitKey(0)
 	# cv2.destroyAllWindows()
-	
-	
-	
+
 	#Perform Probabilistic Hough Transform
 	
-	lines = cv2.HoughLinesP(edges,rho=1,theta=np.pi/180,threshold=10,minLineLength=30,maxLineGap=30)
+	lines = cv2.HoughLinesP(edges,rho=1,theta=np.pi/180,threshold=10,minLineLength=100,maxLineGap=10)
 	
 	# Extract line segment endpoints from Hough lines
 	line_segments = []
@@ -162,19 +260,30 @@ def houghlines():
 		for line in lines:
 			x1, y1, x2, y2 = line[0]
 			line_segments.append((x1, y1, x2, y2))
-	#print(len(line_segments))
+	print(len(line_segments))
+
+	
 	
 	for segment in line_segments:
 	    x1, y1, x2, y2 = segment
-	    cv2.line(img_uint8, (x1, y1), (x2, y2), (0, 0, 255), 2)  # Draw line segments on the image
+	    cv2.line(enhanced_image, (x1, y1), (x2, y2), (0, 0, 255), 2)  # Draw line segments on the image
 	
-	cv2.imshow('Probabilistic Hough Transform', img_uint8)
+	cv2.namedWindow('Probabilistic Hough Transform', cv2.WINDOW_NORMAL)  
+	cv2.imshow('Probabilistic Hough Transform', enhanced_image)
+	screen_width, screen_height = 1090, 1080  
+	cv2.resizeWindow('Probabilistic Hough Transform', screen_width, screen_height)
 	cv2.waitKey(0)
 	cv2.destroyAllWindows()
+	
+	
+houghlines()
+	
 
 
-#---------------------------- Grafico --------------------------------------------------------------------
 
+#--------------------------------------------------------------------------------------------------------
+#------------------------------------------ Grafico -----------------------------------------------------
+#--------------------------------------------------------------------------------------------------------
 
 TLE_file=f'TLE Catalog-2023228.json'
 WindowFile=['PAER_SURV_4_260789_230228_080700-051142_scan102_01_RaDec_Window','PAER_SURV_4_260789_230228_080700-051142_scan102_02_RaDec_Window',
@@ -333,7 +442,4 @@ def TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory):
 	plt.xlim([0, 359])
 	plt.ylim([-20, 20])
 	plt.show()
-TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory)
 
-WindowFile=['PAER_SURV_4_260789_230228_080700-051142_scan102_01_RaDec_Window','PAER_SURV_4_260789_230228_080700-051142_scan102_02_RaDec_Window',
-'PAER_SURV_4_260789_230228_080700-051142_scan102_03_RaDec_Window','PAER_SURV_4_260789_230228_080700-051142_scan102_04_RaDec_Window']
