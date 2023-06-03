@@ -26,7 +26,22 @@ import shutil
 from skyfield.api import EarthSatellite
 from skyfield.api import load, wgs84,utc
 import math
+import copy
+import psutil
+from numpy.lib.recfunctions import append_fields, drop_fields
+
+
 # CATALOG FUNCTIONS
+
+# ~ def Guardar():
+	# ~ DiretoriaCatalogoEntrada = '/home/luis/Desktop/Codigos/PipelineTrabalhar/Files/Catalogues/UCAC5Original'
+# ~ DiretoriaCatalogoSaida	 = '/home/luis/Desktop/Codigos/PipelineTrabalhar/Files/Catalogues/UCAC5'
+# ~ ZoneFiles = os.listdir(DiretoriaCatalogoEntrada)
+# ~ ZoneFiles.sort()
+# ~ for ZoneFile in ZoneFiles:
+	# ~ print(ZoneFile)
+	# ~ SPADEFunctions.UCAC5ToTxtCorrection(DiretoriaCatalogoEntrada + '/' + ZoneFile,DiretoriaCatalogoSaida + '/' + ZoneFile,7)
+
 
 def UCAC5ToTxtTotal(FileIn,FileOutput):
 	'''
@@ -75,6 +90,50 @@ def UCAC5ToTxtTotal(FileIn,FileOutput):
 			linha2 = f'{srcid:10},{Ra:11},{Dec:11},{Erg:5},{Edg:5},{flg:2},{nu:2},{epu:4},{ira:11},{idc:11},{pmur:5},{pmud:5},{pmer:5},{pmed:5},{gmag:5},{umag:5},{rmag:5},{jmag:5},{hmag:5},{kmag:5}\n'
 			ficheiro.write(linha2)
 
+def UCAC5ToTxtCorrection(FileIn,FileOutput,Years):
+	'''
+	Function that reads the UCAC5 original file and returns a Txt file with all information
+	
+	INPUTS:
+	FileIn 				-> Path to UCAC5 zone file									(str)
+	FileOutput		 	-> Path to output file name									(str)
+	
+	RETURNS:
+	NONE
+	
+	FILES CREATED:
+	FileOutput			-> File with all UCAC5 information							(txt)
+	'''
+	with open(FileIn,'rb') as ficheiro:
+		A = ficheiro.read()
+	
+	with open(FileOutput,'a') as ficheiro:	
+		for i in range(int(len(A)/52)):
+			DadosEstrela = A[i*52:(i+1)*52]
+			
+			#Set de 15 bytes (15)
+			Ra = struct.unpack('i',DadosEstrela[8:12])[0]
+			Dec = struct.unpack('i',DadosEstrela[12:16])[0]
+			Erg = int.from_bytes(DadosEstrela[16:18],'little')
+			Edg = int.from_bytes(DadosEstrela[18:20],'little')
+			pmur = int.from_bytes(DadosEstrela[32:34],'little')
+			pmud = int.from_bytes(DadosEstrela[34:36],'little')
+			pmer = int.from_bytes(DadosEstrela[36:38],'little')
+			pmed = int.from_bytes(DadosEstrela[38:40],'little')
+			
+			gmag = int.from_bytes(DadosEstrela[40:42],'little')
+			umag = int.from_bytes(DadosEstrela[42:44],'little')
+			rmag = int.from_bytes(DadosEstrela[44:46],'little')
+			jmag = int.from_bytes(DadosEstrela[46:48],'little')
+			hmag = int.from_bytes(DadosEstrela[48:50],'little')
+			kmag = int.from_bytes(DadosEstrela[50:52],'little')
+			
+			Ra,Dec 	= Ra+Years*pmur/10,Dec+Years*pmud/10
+			Erg,Edg = Erg/10+Years*pmer/10,Edg/10+Years*pmed/10
+		
+			linha2 = f'{Ra:11},{Dec:11},{Erg:5},{Edg:5},{gmag:5},{umag:5},{rmag:5},{jmag:5},{hmag:5},{kmag:5}\n'
+			ficheiro.write(linha2)
+
 def UCAC5ToTxt(FileIn,FileOutput):
 	'''
 	Function that reads the UCAC5 original file and returns a Txt file with Ra, Dec and g/u/r/j/h/k magnitudes
@@ -98,7 +157,9 @@ def UCAC5ToTxt(FileIn,FileOutput):
 			
 			#Set de 15 bytes (15)
 			Ra = struct.unpack('i',DadosEstrela[8:12])[0]
-			Dec = struct.unpack('i',DadosEstrela[12:16])[0]	
+			Dec = struct.unpack('i',DadosEstrela[12:16])[0]
+			Erg = int.from_bytes(DadosEstrela[16:18],'little')
+			Edg = int.from_bytes(DadosEstrela[18:20],'little')	
 			gmag = int.from_bytes(DadosEstrela[40:42],'little')
 			umag = int.from_bytes(DadosEstrela[42:44],'little')
 			rmag = int.from_bytes(DadosEstrela[44:46],'little')
@@ -106,7 +167,7 @@ def UCAC5ToTxt(FileIn,FileOutput):
 			hmag = int.from_bytes(DadosEstrela[48:50],'little')
 			kmag = int.from_bytes(DadosEstrela[50:52],'little')
 		
-			linha2 = f'{Ra:11},{Dec:11},{gmag:5},{umag:5},{rmag:5},{jmag:5},{hmag:5},{kmag:5}\n'
+			linha2 = f'{Ra:11},{Dec:11},{Erg:5},{Edg:5},{gmag:5},{umag:5},{rmag:5},{jmag:5},{hmag:5},{kmag:5}\n'
 			ficheiro.write(linha2)
 
 def UCAC4ToTxtTotal(FileIn,FileOutput):
@@ -344,29 +405,35 @@ def ReadUCAC5(Zones,Folder,MagLim):
 	FILES CREATED:
 	NONE
 	'''
-	Ra = []
-	Dec = []
+	Ra		= []
+	Erg 	= []
+	Dec		= []
+	Edg 	= []
 	Folder += 'UCAC5/'
 	Mags = {'G':[],'U':[],'R':[],'J':[],'H':[],'K':[]}
 	for i in Zones:
 		zone = f'{i:03d}'
-		with open(Folder + zone + '.txt','r') as text:
+		with open(Folder + 'z' + zone,'r') as text:
+			print('z' + zone)
+			print(psutil.virtual_memory()[3]/1000000000)
 			while True:
 				line = text.readline()
 				if line == '':
 					break
 				
 				line = line.strip().split(',')
-				Mag = float(line[2])/1000
+				Mag = float(line[4])/1000
 				if Mag < MagLim:
 					Ra.append(int(line[0])/(60*60*1000))
 					Dec.append(int(line[1])/(60*60*1000))
+					# ~ Erg.append(int(line[2])/(60*60*1000))
+					# ~ Edg.append(int(line[3])/(60*60*1000))
 					Mags['G'].append(Mag)
-					Mags['U'].append(float(line[3])/1000)
-					Mags['R'].append(float(line[4])/1000)
-					Mags['J'].append(float(line[5])/1000)
-					Mags['H'].append(float(line[6])/1000)
-					Mags['K'].append(float(line[7])/1000)
+					Mags['U'].append(float(line[4])/1000)
+					Mags['R'].append(float(line[5])/1000)
+					Mags['J'].append(float(line[6])/1000)
+					Mags['H'].append(float(line[7])/1000)
+					Mags['K'].append(float(line[8])/1000)
 			
 	return SkyCoord(ra = Longitude(Ra, unit = u.deg), dec = np.array(Dec)*u.deg,frame = 'cirs'), Mags
 		
@@ -607,16 +674,30 @@ def str2bool(BoolStr):
 	else:
 		return BoolStr
 
-def AngleDifferencePoints(Coord1,Coord2):
+def AngleDifferencePoints(Coord1,Coord2,method):
 	Ra1  = np.radians(Coord1[0])
 	Dec1 = np.radians(Coord1[1])
 	Ra2  = np.radians(Coord2[0])
 	Dec2 = np.radians(Coord2[1])
 	
-	difference = np.arccos(np.sin(Dec1)*np.sin(Dec2)+np.cos(Dec1)*np.cos(Dec2)*np.cos(Ra1-Ra2))
+	if method      == 'normal':
+		difference = np.arccos(np.sin(Dec1)*np.sin(Dec2)+np.cos(Dec1)*np.cos(Dec2)*np.cos(Ra1-Ra2))
+	elif method    == 'approximation':
+		difference = np.sqrt(np.cos(Ra1)*(Ra1-Ra2)**2 + (Dec1-Dec2)**2)
+	elif method    == 'haversine':
+		# ~ print((np.sin((Ra1-Ra2)/2)))
+		# ~ print((np.sin((Ra1-Ra2)/2))**2)
+		# ~ print((np.sin((Dec2-Dec1)/2))**2)
+		# ~ print(np.cos(Ra1))
+		# ~ print(np.cos(Ra2))
+		
+		
+		# ~ print((np.sin((Ra1-Ra2)/2))**2+np.cos(Ra1)+np.cos(Ra2)*(np.sin((Dec2-Dec1)/2))**2)
+		# ~ print('---')
+		difference = 2*np.arcsin(np.sqrt((np.sin((Ra1-Ra2)/2))**2+np.cos(Ra1)+np.cos(Ra2)*(np.sin((Dec2-Dec1)/2))**2))
 	return np.degrees(difference)
 	
-def AngleDifferenceLists(L1,L2):
+def AngleDifferenceLists(L1,L2,method):
 	''' Calculates Angular difference between two sets of data Keys: 'RA' and 'DEC'
 	L -> {RA:[Ra1,Ra2],DEC:[Dec1,Dec2]}
 	
@@ -630,7 +711,7 @@ def AngleDifferenceLists(L1,L2):
 	for i in range(len(L1['RA'])):
 		Coord1 = [L1['RA'][i],L1['DEC'][i]]
 		Coord2 = [L2['RA'][i],L2['DEC'][i]]
-		Dists.append(AngleDifferencePoints(Coord1,Coord2))
+		Dists.append(AngleDifferencePoints(Coord1,Coord2,method))
 	
 	return np.array(Dists)
 
@@ -1213,10 +1294,9 @@ def ReadFilesHeader(DayDirectory,header,File):
 		Header_information['Microsecond']=int(abs(int(second)-second)*10**6)
 	
 		
-
 	return Header_information
 	
-def WriteOutput_Json(File,DayDirectory,header,config,Information,Catalogue,CatalogueMags):
+def WriteOutput_Json(File,DayDirectory,header,config,Information,Catalogue,CatalogueMags,Detections):
 	 
 	'''
 	Function that creates a json file with the information about detections from Astrometry:
@@ -1240,28 +1320,32 @@ def WriteOutput_Json(File,DayDirectory,header,config,Information,Catalogue,Catal
 	
 	'''
 	logging.info("Started Writing Output of image " + File)
-
 	items_2_store=[]
-	
+	A = time.time()
 	#The location where the images were taken is necessary to convert RA,DEC coordinates to Alt,Az coordinates
 	location=EarthLocation(
 			lat=float(config['Latitude'])*u.deg,
 			lon=float(config['Longitude'])*u.deg,
 			height=float(config['Height'])*u.m)	
-	
-	
+	logging.debug("Output: got location" + File)
 	#Header Information of proessed files
 	header_data=ReadFilesHeader(DayDirectory,header,File)
 	#The algoritm only continues when the image of which the header information is associated to is the same as the image of current Base
+	logging.debug("Output: read Header" + File)
 	
-	time = datetime.datetime(header_data[0]['Year'],header_data[0]['Month'],header_data[0]['Day'],header_data[0]['Hour'],header_data[0]['Minute'],header_data[0]['Second'],header_data[0]['Microsecond'])
-	
+	time_data = datetime.datetime(header_data['Year'],header_data['Month'],header_data['Day'],header_data['Hour'],header_data['Minute'],header_data['Second'],header_data['Microsecond'])
+	logging.debug("Time read from " + File)
+
 	keys = list(Information.keys())
+	
+	Detections_altaz = Detections.transform_to(AltAz(obstime=time_data, location=location))
 	# ~ Information,Catalogue,CatalogueMags
+	Base = File.split('.')[0]
+	image = File.split('.')[0][-2:]
 	for i in range(len(Information[keys[0]])):			
 			items={}
-			Base = File.split('.')[0]
-			items['image']=File.split('.')[0][-2:]
+			
+			items['image'] = image
 			
 			for key in keys:
 				items[key] = float(Information[key][i])
@@ -1269,26 +1353,28 @@ def WriteOutput_Json(File,DayDirectory,header,config,Information,Catalogue,Catal
 				items['RaCatalogue'] 	= float(Catalogue.ra[i].value)
 				items['DecCatalogue'] 	= float(Catalogue.dec[i].value)
 				items['MagReal'] 		= float(CatalogueMags[i])
-				
-
+			
 			#Ver se não é melhor calcular logo todos os Az e Alt no inicio ou na função anterior
 			ra=items['RaCalculated']*u.deg
 			dec=items['DecCalculated']*u.deg
-			stars = SkyCoord(ra, dec, frame='icrs')
-
-			#Converts Ra,Dec to Alt,Az
-			stars_altaz = stars.transform_to(AltAz(obstime=time, location=location))
-			sky_coords = [stars_altaz.alt.degree,stars_altaz.az.degree]
-
+			
+			sky_coords = [Detections_altaz.alt.degree[i],Detections_altaz.az.degree[i]]
+			
 			items['Alt']=float(sky_coords[0])
 			items['Az']=float(sky_coords[1])
 
 			items_2_store.append(items)
 	
-	with open(f"{DayDirectory}/OutputFiles/{File.split('.')[0]}.json", 'w') as f: 
+	logging.debug("Writing Output now of " + File)
+	with open(f"{DayDirectory}/OutputFiles/{Base}.json", 'w') as f: 
 		json.dump(items_2_store, f, indent=3)
 						
 	logging.info("Finished Writing Output of image " + File)
+	if config['SaveTimes']:	
+		Tempo = time.time() - A
+		with open(f'{DayDirectory}/Times/Output','a') as tempos:
+			linha = f'{Tempo:8}\n'
+			tempos.write(linha)
 
 def LDAC2fits(File_LDAC, File_fits):
 	
@@ -1359,11 +1445,11 @@ def sextractor(File,PipelineDirectory,DayDirectory,SexConfig,n):
 	cmd['-CATALOG_TYPE'] = cattype
 	cmd['-PARAMETERS_NAME'] = SexDir + Params						# Chooses the needed files from the sextractor folder
 	if n == 3:
-		cmd['-PSF_NAME'] = FileBase.replace('_psf', 'LDAC_psf.fits')
+		# ~ cmd['-PSF_NAME'] = FileBase.replace('_psf', 'LDAC_psf.fits')
+		cmd['-PSF_NAME'] = FileBase.replace('_psf', 'brightestLDAC_psf.fits')
 	
 	list_cmd = list(itertools.chain.from_iterable(list(cmd.items()))) # Compacts the cmd dictionary created so it can be run through terminal
 	result = subprocess.run(list_cmd, capture_output=True) 			  # Runs the program in terminal and outputs the result and status (0 = good, 255 = bad)
-	
 			
 	return result
 	    		
@@ -1472,7 +1558,7 @@ def find_matching_stars(catalog_stars, image_stars, max_sep=0.5 * u.deg):
 	idx, d2d, d3d = match_coordinates_sky(catalog_stars, image_stars,storekdtree = True)
 	mask = d2d < max_sep
 
-	return idx, mask
+	return idx, mask, d2d
 
 
 ##################################################################################################################################################################
@@ -1503,7 +1589,7 @@ def DarkCorrection(DayDirectory,Data,File,exposure,logging):
 	else:
 		Master = DayDirectory + '/Masters/' + Master										# Gets master directory
 		MasterDark = CCDData.read(Master) 												# Reads and then applies master
-		Data = ccdproc.ccd_process(Data, dark_frame=MasterDark,dark_exposure = float(MasterDark.header["EXPOSURE"].replace(',','.')) * u.s,data_exposure = float(Data.header["EXPOSURE"].replace(',','.')) *u.s)
+		Data = ccdproc.ccd_process(Data, dark_frame=MasterDark,dark_exposure = exposure * u.s,data_exposure = exposure *u.s)
 		Data.header['DARK'] = 'True'													# Writes in header
 		logging.debug("Finished Dark correction of file " + File)					# Logger information
 
@@ -1659,7 +1745,7 @@ def ImagePlotTxt(DayDirectory,Images):
 
 # Image Difference detection
 
-def FindMatchJson(obj,ImageData,scale): 
+def FindMatchJson(obj,ImageData,scale,config): 
 	''' 
 	Function finds match between an object and all points in a Json file (bad, slow)
 	
@@ -1678,13 +1764,13 @@ def FindMatchJson(obj,ImageData,scale):
 	for key,point in ImageData.items():  #fixates a point an image to compares to all other points from different images
 		FWHM = max(np.mean(point['FWHM']),obj['FWHM']) 
 		L2=[np.mean(point['RaCalculated']),np.mean(point['DecCalculated'])]
-		distance=AngleDifferencePoints(L1,L2)
-
+		distance=AngleDifferencePoints(L1,L2,config['DistanceMethod'])
+		print(distance)
 		if float(distance) <= scale*FWHM/3600:
 			return key
 	
 	return False
-			
+		
 def CompareImagesJsonSkyCoord(DayDirectory,Images,scale):
 	''' 
 	Function compares Json files to identify unique detections from each image with SkyCoord. Best version to use.
@@ -1695,7 +1781,7 @@ def CompareImagesJsonSkyCoord(DayDirectory,Images,scale):
 	scale 				-> pixel scale used for comparison						 			(float)
 	
 	RETURNS: 
-	dic					-> dictionary with all unique sources and information for each		(CCDData)
+	dic					-> dictionary with all sources and where they repeat in all images	(dict)
 	
 	FILES CREATED:
 	NONE
@@ -1716,6 +1802,7 @@ def CompareImagesJsonSkyCoord(DayDirectory,Images,scale):
 			dic[count][key] = []
 			dic[count][key].append(float(obj[key]))
 	
+	logging.debug("Created Dictionary with first image " + Image)
 	for count, Image in enumerate(Images[1:]):
 		RaN = []
 		DecN = []
@@ -1730,7 +1817,7 @@ def CompareImagesJsonSkyCoord(DayDirectory,Images,scale):
 		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Sources of all previous images
 		DetectionsN = SkyCoord(ra = Longitude(RaN, unit = u.deg), dec = np.array(DecN)*u.deg, frame = 'cirs')  		# Sources of image N
 		idx, d2d, d3d = match_coordinates_sky(DetectionsN, Detections1,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
-		mask = d3d < np.radians(scale*np.median(FWHM)/3600)
+		mask = d3d < np.radians(scale*np.median(FWHM)/(2*3600))
 		for i,found in enumerate(mask):
 			obj = ImageData[i]
 			if found:
@@ -1746,91 +1833,20 @@ def CompareImagesJsonSkyCoord(DayDirectory,Images,scale):
 					dic[len(dic)-1][key] = []
 					dic[len(dic)-1][key].append(float(obj[key]))
 	return dic
-
-def SeeVariation(dic_unicas,max_sep):
-	'''
-	Number -> number of object in dic
-	
-	
-	
-	'''
-	objects = {}
-	Number1,Ra1,Dec1,X1,Y1,FWHM1 = dic_unicas[1]['Number'],  dic_unicas[1]['Ra'],  dic_unicas[1]['Dec'],	dic_unicas[1]['X'],	dic_unicas[1]['Y'], dic_unicas[1]['FWHM']
-	for i in range(len(Number1)):
-		objects[i] = {}
-		objects[i]['image'] = [1]
-		objects[i]['Number'] = [Number1[i]]
-		objects[i]['Ra'] = [Ra1[i]]
-		objects[i]['Dec'] = [Dec1[i]]
-		objects[i]['X'] = [X1[i]]
-		objects[i]['Y'] = [Y1[i]]
-		objects[i]['FWHM'] = [FWHM1[i]]
-		
-	for image in range(len(dic_unicas)-1):
-		Number2,Ra2,Dec2,X2,Y2,FWHM2 = dic_unicas[image+2]['Number'],dic_unicas[image+2]['Ra'],dic_unicas[image+2]['Dec'],dic_unicas[image+2]['X'],dic_unicas[image+2]['Y'],dic_unicas[image+2]['FWHM']
-			
-		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
-		Detections2 = SkyCoord(ra = Longitude(Ra2, unit = u.deg), dec = np.array(Dec2)*u.deg, frame = 'cirs')  		# Sources of image N+1
-		
-		n = 1
-		while True:
-			idx, d2d, d3d = match_coordinates_sky(Detections2, Detections1,nthneighbor=n,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
-			mask = d3d < max_sep
-			n+=1
-			if sum(mask) == 0:
-				break
-				
-			for count,found in enumerate(mask):
-				if found:
-					if image+2 in objects[idx[count]]['image']:
-						nnew = len(objects)
-						objects[nnew] = {}
-						objects[nnew]['image']  =  objects[idx[count]]['image'][:-1]
-						objects[nnew]['Number'] =  objects[idx[count]]['Number'][:-1]
-						objects[nnew]['Ra']     =  objects[idx[count]]['Ra'][:-1]
-						objects[nnew]['Dec']    =  objects[idx[count]]['Dec'][:-1]
-						objects[nnew]['X']   	=  objects[idx[count]]['X'][:-1]
-						objects[nnew]['Y']    	=  objects[idx[count]]['Y'][:-1]
-						objects[nnew]['FWHM']  	=  objects[idx[count]]['FWHM'][:-1]
-						
-						objects[nnew]['image'].append(image+2)
-						objects[nnew]['Number'].append(Number2[count])
-						objects[nnew]['Ra'].append(Ra2[count])
-						objects[nnew]['Dec'].append(Dec2[count])
-						objects[nnew]['X'].append(X2[count])
-						objects[nnew]['Y'].append(Y2[count])
-						objects[nnew]['FWHM'].append(FWHM2[count])
-						
-					else:
-						objects[idx[count]]['image'].append(image+2)
-						objects[idx[count]]['Number'].append(Number2[count])
-						objects[idx[count]]['Ra'].append(Ra2[count])
-						objects[idx[count]]['Dec'].append(Dec2[count])
-						objects[idx[count]]['X'].append(X2[count])
-						objects[idx[count]]['Y'].append(Y2[count])
-						objects[idx[count]]['FWHM'].append(FWHM2[count])
-						
-				else:
-					nnew = len(objects)
-					objects[nnew] = {}
-					objects[nnew]['image'] 		= [image+2]
-					objects[nnew]['Number'] 	= [Number2[count]]
-					objects[nnew]['Ra'] 		= [Ra2[count]]
-					objects[nnew]['Dec']		= [Dec2[count]]
-					objects[nnew]['X'] 			= [X2[count]]
-					objects[nnew]['Y'] 			= [Y2[count]]
-					objects[nnew]['FWHM']		= [FWHM2[count]]
-				
-			
-		Ra1  = []
-		Dec1 = []
-		for i in range(len(objects)):
-			Ra1.append(objects[i]['Ra'][-1])
-			Dec1.append(objects[i]['Dec'][-1])
-	
-	return objects
 	
 def MakeDicUnique(dic):
+	''' 
+	Function compares Json files to identify unique detections from each image with SkyCoord. Best version to use.
+	
+	INPUTS:
+	dic					-> dictionary with all sources and where they repeat in all images	(dict)
+
+	RETURNS: 
+	dic_unicas			-> dictionary with all unique sources from each image				(dict)
+	
+	FILES CREATED:
+	NONE
+	''' 
 	dic_unicas = {}
 	for i,key in enumerate(dic):
 		if len(dic[key]['image']) == 1:
@@ -1855,6 +1871,133 @@ def MakeDicUnique(dic):
 				dic_unicas[n_image]['Y'] = dic[key]['Ydetect']
 				dic_unicas[n_image]['FWHM'] = dic[key]['FWHM']
 	return dic_unicas
+
+def SeeVariation(dic_unicas,max_sep):
+	''' 
+	Receives dictionary with unique detections from each image and forms sets of points that may be a debris
+	
+	INPUTS:
+	dic_unicas			-> dictionary with all unique sources from each image				(dict)
+	{1:{'image':[1,1,1,1],'Number':[5,6,7,8],'Ra','Dec','X','Y','FWHM',
+	
+	max_sep				-> Maximum tolerated separation between consecutive frames, radians	(float)
+	
+	RETURNS: 
+	objects				-> dictionary with sets of possible detections of the same debris	(dict)
+	{0: {'image': [2], 'Number': [27], 'Ra': [120.57656867022732], 'Dec': [-6.254464296302288], 'X': [1817.36669921875], 'Y': [73.31082153320312], 'FWHM': [2.0498147010803223]}, 
+	1: {'image': [2], 'Number': [45], 'Ra': [120.51561729875857], 'Dec': [-6.278497634636404], 'X': [1863.556396484375], 'Y': [92.31710815429688], 'FWHM': [6.452471733093262]}}
+	FILES CREATED:
+	NONE
+	''' 
+	
+
+	objects = {}
+	Images = list(dic_unicas.keys())
+	Number1,Ra1,Dec1,X1,Y1,FWHM1 = dic_unicas[Images[0]]['Number'],  dic_unicas[Images[0]]['Ra'],  dic_unicas[Images[0]]['Dec'],	dic_unicas[Images[0]]['X'],	dic_unicas[Images[0]]['Y'], dic_unicas[Images[0]]['FWHM']
+	# Saves all detections from image 1 as possible objects
+	for i in range(len(Number1)):
+		objects[i] = {}
+		objects[i]['image'] = [Images[0]]
+		objects[i]['Number'] = [Number1[i]]
+		objects[i]['Ra'] = [Ra1[i]]
+		objects[i]['Dec'] = [Dec1[i]]
+		objects[i]['X'] = [X1[i]]
+		objects[i]['Y'] = [Y1[i]]
+		objects[i]['FWHM'] = [FWHM1[i]]
+	
+	# For every consequent image, compares to the list of objects saved to see if it is closer than the max_sep given
+	# If the detection is not from a consecutive image, the separation needs to be in the interval expected with max_sep from each image
+	# If it finds a detection close enough, it saves both the old and the new set by appeding the new detection
+	# If it doesn't find any set to include, it saves the detection as a possible object for future comparisons 
+	
+	
+	for CurrentImage in Images[1:]:
+		Number2,Ra2,Dec2,X2,Y2,FWHM2 = dic_unicas[CurrentImage]['Number'],dic_unicas[CurrentImage]['Ra'],dic_unicas[CurrentImage]['Dec'],dic_unicas[CurrentImage]['X'],dic_unicas[CurrentImage]['Y'],dic_unicas[CurrentImage]['FWHM']
+			
+		DetectionsSaved 		= SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
+		DetectionsCurrentImage 	= SkyCoord(ra = Longitude(Ra2, unit = u.deg), dec = np.array(Dec2)*u.deg, frame = 'cirs')  		# Sources from current image
+		
+		n = 0
+		NewObjects = {}
+		while True:
+			n+=1
+			sums = 0
+			idx, d2d, d3d = match_coordinates_sky(DetectionsCurrentImage, DetectionsSaved,nthneighbor=n,storekdtree = True) 	#length matches DetectectionsCurrentImage, n from DetectionsCurrentImage matches idx[n] goes into DetectionSaved
+			for count,distance in enumerate(d3d): 																				#d3d is in radians
+				SavedObject = copy.deepcopy(objects[idx[count]])																			
+				ImageSaved = SavedObject['image'][-1]
+				found = distance < max_sep*(CurrentImage-ImageSaved)
+				
+				if (CurrentImage == 4) and (SavedObject['image'] == [2,3]) and Number2[count]==5440:
+					print('olalalalalal')
+				
+				# ~ if Number2[count] == 5440:
+					# ~ print('----------------------------------')
+					# ~ print('ola')
+					# ~ print(n)
+					# ~ print(distance*3600*180/3.1415)
+					# ~ print(SavedObject['Number'])
+					# ~ print(found)
+				
+				
+				# ~ if (X1[idx[count]] > 1972) and (X2[count] > 1940) and (Y1[idx[count]] > 1526) and (Y2[count] > 1525):
+					# ~ print(CurrentImage)
+					# ~ print(ImageSaved)
+					# ~ print(d3d[count])
+					# ~ print(found)
+				
+				# ~ if (X1[idx[count]] > 1940) and (X2[count] > 1910) and (Y1[idx[count]] > 1525) and (Y2[count] > 1525):
+					# ~ print(CurrentImage)
+					# ~ print(ImageSaved)
+					# ~ print(d3d[count])
+					# ~ print(found)
+				
+				
+				if found:
+					nnew = len(objects) + len(NewObjects)
+					sums += 1
+					NewObjects[nnew] = SavedObject
+					NewObjects[nnew]['image'].append(CurrentImage)
+					NewObjects[nnew]['Number'].append(Number2[count])
+					NewObjects[nnew]['Ra'].append(Ra2[count])
+					NewObjects[nnew]['Dec'].append(Dec2[count])
+					NewObjects[nnew]['X'].append(X2[count])
+					NewObjects[nnew]['Y'].append(Y2[count])
+					NewObjects[nnew]['FWHM'].append(FWHM2[count])
+					# ~ if (X1[idx[count]] > 1972) and (X2[count] > 1940) and (Y1[idx[count]] > 1526) and (Y2[count] > 1525):
+						# ~ print(NewObjects[nnew])
+					# ~ if Number2[count] == 5440:
+						# ~ print('adeus')
+						# ~ print(NewObjects[nnew])
+
+					
+			if sums == 0:
+				break
+		
+		objects.update(NewObjects)	
+		for i in range(len(Number2)):
+			nnew = len(objects)
+			objects[nnew] = {}
+			objects[nnew]['image'] 		= [CurrentImage]
+			objects[nnew]['Number'] 	= [Number2[i]]
+			objects[nnew]['Ra'] 		= [Ra2[i]]
+			objects[nnew]['Dec']		= [Dec2[i]]
+			objects[nnew]['X'] 			= [X2[i]]
+			objects[nnew]['Y'] 			= [Y2[i]]
+			objects[nnew]['FWHM']		= [FWHM2[i]]
+		
+			
+		Ra1  = []
+		Dec1 = []
+		X1 = []
+		Y1 = []
+		for i in range(len(objects)):
+			Ra1.append(objects[i]['Ra'][-1])
+			Dec1.append(objects[i]['Dec'][-1])
+			X1.append(objects[i]['X'][-1])
+			Y1.append(objects[i]['Y'][-1])
+	
+	return objects
 	
 def CleanObjects(Objects,config):
 	'''
@@ -1870,7 +2013,7 @@ def CleanObjects(Objects,config):
 	
 	for obj in list(Objects.keys()):
 		# STEP1: Removes objects with less than 3 detections
-		if len(Objects[obj]['Ra']) < 3:
+		if len(Objects[obj]['Ra']) < int(config['MinGroup']):
 			del Objects[obj]
 			continue
 		
@@ -1884,25 +2027,27 @@ def CleanObjects(Objects,config):
 			d.append(np.sqrt((X2-X1)**2 + (Y2-Y1)**2)/(image2-image1))
 			dV.append(np.arctan2(Y2-Y1,X2-X1))
 			
+		
 		# STEP2: Removes sets with varying distance between consecutive points	
 		if config['CheckDistance']:	
 			if abs((max(d)-min(d))/max(d)) > float(config['percent_distance']):
 				del Objects[obj]
 				continue
+			# ~ else:
+				# ~ print(abs((max(d)-min(d))/max(d)))
+				# ~ print('a')
+		
 		#STEP3: Removes sets with varying direction
 		if config['CheckDirection']:	
 			if abs(max(dV)-min(dV)) > np.radians(float(config['angle_difference'])):
 				del Objects[obj]
 				continue
-		print('----------------')
-		print('X: ',X1)
-		print('Y: ',Y1)
-		print('FWHM: ',Objects[obj]['FWHM'][j])
-		print(d)
-		print(abs((max(d)-min(d))/max(d)))
-		print(np.degrees(dV))
-		print(np.degrees(abs(max(dV)-min(dV))))
-			
+			# ~ else:
+				# ~ print(np.degrees(abs(max(dV)-min(dV))))
+				# ~ print('b')
+				# ~ print('------------')
+				
+		
 	return Objects
 		
 
@@ -1911,7 +2056,7 @@ def CleanObjects(Objects,config):
 #TLE code
 
 
-def CreateFilesForTLE(DayDirectory,TLE_Directory,FIT_Files):
+def CreateFilesForTLE(DayDirectory,TLE_Directory_Output,FIT_Files):
 	''' 
 	Function that copies .fit and .rdls files from AstrometryFiles directory to the TLE directory and renames them. 
 
@@ -1930,28 +2075,27 @@ def CreateFilesForTLE(DayDirectory,TLE_Directory,FIT_Files):
 
 	'''
 	
-
 	for i in range(0,len(FIT_Files)):
 		image=FIT_Files[i]
 		
 		#Creates the Output files for AltAz_window function. Since Ra and Dec coordinates vary with time and date, and it is necessary to have four files because the
 		# Alt_window and Az_window result will be different for each image.
 		src_file_path = f'{DayDirectory}/AstrometryFiles/{image.split(".")[0]}'
-		dst_file_path = f'{TLE_Directory}/{image.split(".")[0]}'
+		dst_file_path = f'{TLE_Directory_Output}/{image.split(".")[0]}'
 		shutil.copy(src_file_path, dst_file_path)
 		new_dst_file_name = f'{image.split(".")[0]}_RaDec_Window'
 		os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
 		
 	#Creates the rdls file to store the satellite RaDec coordinates. 
 	src_file_path = f'{DayDirectory}/AstrometryFiles/{FIT_Files[0].split(".")[0]}.rdls'
-	dst_file_path = f'{TLE_Directory}/{image.split(".")[0]}.rdls'
+	dst_file_path = f'{TLE_Directory_Output}/{image.split(".")[0]}.rdls'
 	shutil.copy(src_file_path, dst_file_path)
 	new_dst_file_name = f'{FIT_Files[0].split(".")[0][:-3]}_RaDec.rdls'
 	os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
 	
 	#Creates the fit file to store the satellite XY coordinates.
 	src_file_path = f'{DayDirectory}/AstrometryFiles/{FIT_Files[0].split(".")[0]}'
-	dst_file_path = f'{TLE_Directory}/{image.split(".")[0]}'
+	dst_file_path = f'{TLE_Directory_Output}/{image.split(".")[0]}'
 	shutil.copy(src_file_path, dst_file_path)
 	new_dst_file_name = f'{FIT_Files[0].split(".")[0][:-3]}_XY'
 	os.rename(dst_file_path, os.path.join(os.path.dirname(dst_file_path), new_dst_file_name))
@@ -2027,7 +2171,7 @@ def CreateRDLSFile_RaDEC(Ra,Dec,FileName):
 
 		A.close()
 
-def TLE_parameters(TLE_Directory,TLE_file):
+def TLE_parameters(TLE_Directory_Files,TLE_file):
 	''' 
 	Function that takes the TLE catalog previously stored in a json file and filters the satellites to those select in GeoProtectedZonePlus
 	
@@ -2048,7 +2192,7 @@ def TLE_parameters(TLE_Directory,TLE_file):
 	mu=3.986004418*10**5 #standard gravitacional parameter of the Earth in km³/s²
 	geo_altitude=35786 #in kms
 	
-	with open(f'{TLE_Directory}/{TLE_file}','r') as fp:
+	with open(f'{TLE_Directory_Files}/{TLE_file}','r') as fp:
 		GP_elements= json.load(fp)
 		
 		for i in GP_elements:
@@ -2165,10 +2309,11 @@ def TLESatellitePosition(config,DayDirectory,FileXY,FIT_Files,header_data,TLE_fi
 	satellites  		-> List of (Catalog Number, Azimuth, Altitude, Right Ancention, Declination, X and Y)	(list)
 	
 	'''
+	TLE_Directory_Files = f"{TLE_Directory}/TLEFiles"
+	TLE_Directory_Output = f"{TLE_Directory}/TLEOutput"	
+	CreateFilesForTLE(DayDirectory,TLE_Directory_Output,FIT_Files)
 	
-	CreateFilesForTLE(DayDirectory,TLE_Directory,FIT_Files)
-	
-	tle_list=TLE_parameters(TLE_Directory,TLE_file)
+	tle_list=TLE_parameters(TLE_Directory_Files,TLE_file)
 	ts = load.timescale()
 	
 	satellites=[]
@@ -2180,7 +2325,7 @@ def TLESatellitePosition(config,DayDirectory,FileXY,FIT_Files,header_data,TLE_fi
 		image=FIT_Files[num]
 		info=header_data[num]
 		t = ts.utc(info['Year'],info['Month'],info['Day'],info['Hour'],info['Minute'],info['Second'])
-		Alt,Az=AltAz_window(config,info,image,TLE_Directory,DayDirectory,FileXY)
+		Alt,Az=AltAz_window(config,info,image,TLE_Directory_Output,DayDirectory,FileXY)
 	
 		for i in tle_list:
 			
@@ -2213,18 +2358,17 @@ def TLESatellitePosition(config,DayDirectory,FileXY,FIT_Files,header_data,TLE_fi
 				
 				Ra.append(math.degrees(ra.radians))
 				Dec.append(math.degrees(dec.radians))
-		
-	FileName=f'{TLE_Directory}/{FIT_Files[0].split(".")[0][:-3]}_RaDec.rdls' 
+	FileName=f'{TLE_Directory_Output}/{FIT_Files[0].split(".")[0][:-3]}_RaDec.rdls' 
 	CreateRDLSFile_RaDEC(Ra,Dec,FileName)
 
 	
 	FileWc=f'{DayDirectory}/AstrometryFiles/{FIT_Files[0].split(".")[0]}.wcs'
-	FileOutput=f'{TLE_Directory}/{FIT_Files[0].split(".")[0][:-3]}_XY'
+	FileOutput=f'{TLE_Directory_Output}/{FIT_Files[0].split(".")[0][:-3]}_XY'
 	result, status = RaDecToXY(FileWc,FileName,FileOutput)
 	
 	return satellites
 	
-def Write_TLE_Output_Json(FIT_Files,Satellite,TLE_Directory):
+def Write_TLE_Output_Json(FIT_Files,Satellite,TLE_Directory_Output):
 	''' 
 	Function that creates a json file with all the satellites that the pipeline should be detecting in a set of images.
 	 The file created stores the following information: ImageName,CatalogNumber,Alt,Az,Ra,Dec,X,Y
@@ -2236,62 +2380,80 @@ def Write_TLE_Output_Json(FIT_Files,Satellite,TLE_Directory):
 							
 	
 	FILES CREATED:
-	f'{image.name}_Ouput.json'          -> Json File with Satellite information 						(json)
+	f'{image.name}_Output.json'          -> Json File with Satellite information 						(json)
 
 	'''
 	
-	A=fits.open(f'{TLE_Directory}/{FIT_Files[0].split(".")[0][:-3]}_XY')
+	A=fits.open(f'{TLE_Directory_Output}/{FIT_Files[0].split(".")[0][:-3]}_XY')
+	data = []
+	if len(A) == 2:
+		
+		x=A[1].data['X']
+		y=A[1].data['Y']
+		for i in range(0,len(x)):
+			if x[i]<0 or y[i]<0: #If x or y is negative, it means the satellite is outside the FOV of the image, therefore it's not stored
+				continue
+			else:
+				Satellite[i]['X (pixel) ']=x[i]
+				Satellite[i]['Y (pixel) ']=y[i]
+				data.append(Satellite[i])
+				
+			
+	with open(f'{TLE_Directory_Output}/{FIT_Files[0].split(".")[0][:-3]}_Output.json', 'w') as f:
+		json.dump(data, f, indent=3)
+							
+def Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,image,sat_xy_coordinates):
+	
+	'''
+	Function created to plot the image being analysed and draw the position of the satellites on top of it, according to the files created in SatellitePosition
+	function with TLES
+	
+	INPUTS:
+	DayDirectory 		-> Directory of present DayDirectory							(str)	
+	image				-> Image that's being analysed									(str)
+	sat_xy_coordinates  -> Fit file with satellites XY coordinates					    (str)
+	
+	FILES CREATED:
+	NONE
+	'''
+	
+	
+	A=fits.open(f'{CatFilesDirectory}/{sat_xy_coordinates}')
+		
 	x=A[1].data['X']
 	y=A[1].data['Y']
-	data=[]
+
+	
+	fig = plt.figure()
+	ax = fig.add_subplot(111) 
+	vmin,vmax = None,None
+
+
+	Imagem = CCDData.read(f"{DayDirectory}/ProcessedImages/{image}", unit = 'adu') 
+	plt.imshow(Imagem,cmap='gray',vmin=vmin or np.nanpercentile(Imagem,3),vmax=vmax or np.nanpercentile(Imagem, 99))
+	plt.title(f"{image.split('.')[0]}")
+
+
 	for i in range(0,len(x)):
-		if x[i]<0 or y[i]<0: #If x or y is negative, it means the satellite is outside the FOV of the image, therefore it's not stored
-			continue
-		else:
-			Satellite[i]['X (pixel) ']=x[i]
-			Satellite[i]['Y (pixel) ']=y[i]
-			data.append(Satellite[i])
-			
-			
-	with open(f'{TLE_Directory}/{FIT_Files[0].split(".")[0][:-3]}_Ouput.json', 'w') as f:
-		json.dump(data, f, indent=3)
-			
-def Run_TLE_Code(config,PipelineDirectory,DayDirectory,FileXY,TLE_Directory):
+		c2 = plt.Circle((x[i],y[i]),4, color = 'blue', linewidth=2,fill=False)
+		ax.add_patch(c2)
+		
+	fontprops = fm.FontProperties(size=8)
+
+	scalebar = AnchoredSizeBar(ax.transData,
+                            75/4.7, '(75 arcsec)', 
+                            'lower center', 
+                           pad=0.1,
+                           color='white',
+                           frameon=False,
+                           size_vertical=1,
+                           fontproperties=fontprops)
+
+	ax.add_artist(scalebar)
 	
-	files=os.listdir(f"{DayDirectory}/ProcessedImages")
-
-	dic = {}
-	for elem in files:
-		if elem.split(".")[0][:-2] not in dic:
-			dic[elem.split(".")[0][:-2]]=[]
-		dic[elem.split(".")[0][:-2]].append(elem)
-		
-	result = list(dic.values())
-
+	plt.show()
 	
-	for image_set in result:
-		FIT_Files=image_set
-		
-		header_data=[]
-		for img in range(0,len(FIT_Files)):
-			Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + FIT_Files[img]}", unit = 'adu') 
-			header=Data.header
-			info=ReadFilesHeader(DayDirectory,header,FIT_Files[img])
-			header_data.append(info)
-		
-		for i in header_data:
-			TLE=str(i['Year'])+str(i['Month'])+str(i['Day'])
-
-		TLE_file=f'TLE Catalog-{TLE}.json'
-		
-		if os.path.exists(f'{TLE_Directory}/{TLE_file}'):
-			Satellite=TLESatellitePosition(config,DayDirectory,FileXY,FIT_Files,header_data,TLE_file,TLE_Directory)
-			Write_TLE_Output_Json(FIT_Files,Satellite,TLE_Directory)
-	
-		else:
-			print('TLE FILE missing')
-				
-
+	return True
 
 ##################################################################################################################################################################
 
@@ -2315,6 +2477,7 @@ def ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	File	 			-> Corrected image file										(fits)
 	'''
 	logging.info("Starting Reduction on image " + File)										# Logger information
+	A = time.time()
 	Data = CCDData.read(f"{DayDirectory}/ProcessedImages/{File}" , unit = 'adu') 			# Reads Image
 	Filter = Data.header['FILTER']															# Gets filter from header
 	
@@ -2339,13 +2502,6 @@ def ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 		Data.header['GAIN'] = 'False'														# Writes in header
 		logging.debug("Skipped Gain correction of file " + File)
 		
-	if config["FLAT"]:
-		A = time.time()
-		Data = FlatCorrection(DayDirectory,Data,File,Filter,Masters,logging)
-		FTime = time.time()-A
-	else:
-		Data.header['FLAT'] = 'False'														# Writes in header
-		logging.debug("Skipped Flat correction of file " + File)
 	
 	if config["Background"]:
 		A = time.time()
@@ -2354,6 +2510,14 @@ def ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	else:
 		Data.header['BG'] = 'False'															# Writes in header
 		logging.debug("Skipped Background correction of file " + File)															
+		
+	if config["FLAT"]:
+		A = time.time()
+		Data = FlatCorrection(DayDirectory,Data,File,Filter,Masters,logging)
+		FTime = time.time()-A
+	else:
+		Data.header['FLAT'] = 'False'														# Writes in header
+		logging.debug("Skipped Flat correction of file " + File)
 	
 	if config["CrossTalk"]:		
 		A = time.time()															# Stars crostalk correction if enabled
@@ -2375,6 +2539,12 @@ def ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	DirImage = f"{DayDirectory}/ReducedImages/{File}"	
 	Data.write(DirImage, overwrite = True)
 	logging.info("Finished Reduction of image " + File)
+	if config['SaveTimes']:
+		Tempo = time.time() - A
+		with open(f'{DayDirectory}/Times/Reduction','a') as tempos:
+			linha = f'{Tempo:8}\n'
+			tempos.write(linha)
+	
 	return Data.header
 
 def SextractorPart(File,PipelineDirectory,DayDirectory,config):
@@ -2397,41 +2567,91 @@ def SextractorPart(File,PipelineDirectory,DayDirectory,config):
 	Base.cat 			-> Sextractor catalog with FITS_1.0 types					(fits)
 	BaseLDAC.cat 		-> Sextractor catalog with FITS_LDAC types					(FITS_LDAC)
 	BaseLDAC_psf.fits	-> PSF model obtained with PSFEX							(Psf file)
-	Base_out.cat		-> Ouput file with PSFEX									(txt)
+	Base_out.cat		-> Output file with PSFEX									(txt)
 	Base_psfLDAC.cat	-> Sextractor catalog obtained using PSF model				(Final File)
 	'''
 	A = time.time()
 	Base = File.split('.')[0]
 	FileBase = f"{DayDirectory}/SextractorCatalogue/{Base}"
-	VIGNET = int(config['VIGNET'])
 	logging.info("Started Sextractor Pass of image " + File)
 	
 	# First Sextractor pass: creates 2 catalogs: one in Fits_1.0 format for use in astrometry.net and 1 in Fits_LDAC for use in PSFEX, then sources too close to the
 	# border are elliminated. The threshold for the distance is the VIGNET parameter given in the configuration file
-	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],2)
-	if config['VERBOSE']:
-		print(result)
-	RemoveBorders(FileBase +'LDAC.cat',int(config['VIGNET']))
-	LDAC2fits(FileBase +'LDAC.cat',FileBase +'.cat')	
 	
 	#Secondly, PSFEX is run with the sextractor catalog written before.
 	if config['Photometry']:
-		CatIn 	= f"{FileBase}LDAC.cat"
-		CatOut 	= f"{FileBase}_out.cat"
-		ConfigFile =  f"{PipelineDirectory}/Files/Sextractor/{config['PSFexConfig']}"
-		Rem0FWHM(CatIn)
-		result, status = psfex(CatIn,CatOut,ConfigFile,VIGNET)
+		# Creates LDAC file
+		result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],2)
+		logging.debug("First Pass of Sextractor was sucessfull " + File)
+		if config['VERBOSE']:
+			print(result)
+		RemoveBorders(FileBase +'LDAC.cat',int(config['VIGNET']))
+		logging.debug("Border were removed from " + File)
+		LDAC2fits(FileBase +'LDAC.cat',FileBase +'.cat')	
+		logging.debug("Fits file created from LDAC of  " + File)
 		
-		psf_in = CatIn.replace('.cat', '.psf')
-		psf_out = CatIn.replace('.cat', '_psf.fits')
-		os.rename (psf_in, psf_out)
+	else:
+		result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],1)
+		RemoveBorders(FileBase +'.cat',int(config['VIGNET']))
 		
-		
-		#Lastly, Sextractor is run again with the PSF model, in order to improve photometry
-		resultado = sextractor(Base,PipelineDirectory,DayDirectory,config['SexConfig'],3)
 	logging.info("Finished Sextractor Pass of " + File)	
+	if config['SaveTimes']:
+		Tempo = time.time() - A
+		with open(f'{DayDirectory}/Times/Sextractor','a') as tempos:
+			linha = f'{Tempo:8}\n'
+			tempos.write(linha)
 	
-	return resultado
+	return result
+
+def PSFPart(File,PipelineDirectory,DayDirectory,config,d2d):
+	logging.info("Started PSFEX Pass of image " + File)
+	A = time.time()
+	Base = File.split('.')[0]
+	FileBase = f"{DayDirectory}/SextractorCatalogue/{Base}"
+	CatIn 	= f"{FileBase}LDAC.cat"
+	CatIn2 	= f"{FileBase}brightestLDAC.cat"
+	CatOut 	= f"{FileBase}_out.cat"
+	ConfigFile =  f"{PipelineDirectory}/Files/Sextractor/{config['PSFexConfig']}"
+	
+	
+	# ~ # select the closestObjects objects
+	NSources = int(config['NSourcesPSF'])
+	index = np.argsort(d2d)
+	with fits.open(CatIn, memmap=True) as hdulist:
+		hdulist[2].data = hdulist[2].data[index][:NSources]
+		hdulist_new = fits.HDUList([hdulist[0],hdulist[1], hdulist[2]])
+		hdulist_new.writeto(CatIn2, overwrite=True)
+		hdulist_new.close()
+	logging.debug("Selected only closest sources from " + File)
+	
+	
+	A = time.time()
+	result, status = psfex(CatIn2,CatOut,ConfigFile,int(config['VIGNET']))
+	logging.debug("PSFEX was successful " + File)
+	
+	psf_in = CatIn2.replace('.cat', '.psf')
+	psf_out = CatIn2.replace('.cat', '_psf.fits')
+	os.rename (psf_in, psf_out)
+	logging.debug("Changed Name from PSF file " + File)
+	
+	#Lastly, Sextractor is run again with the PSF model, in order to improve photometry
+	result = sextractor(File,PipelineDirectory,DayDirectory,config['SexConfig'],3)
+	
+	
+	
+	FileBase = FileBase + '_psf'
+	catout = FileBase +'LDAC.cat'
+	FileData = fits.open(catout)
+			
+		
+	Tempo = time.time() - A
+	with open(f'{DayDirectory}/Times/PSFex','a') as tempos:
+		linha = f'{Tempo:8}\n'
+		tempos.write(linha)
+	
+	logging.info("Finished PSFEX Pass of image " + File)
+	
+	return FileData[2].data['MAG_PSF']
 
 def AstrometryPart(File,PipelineDirectory,DayDirectory,config,header):
 	'''
@@ -2464,7 +2684,7 @@ def AstrometryPart(File,PipelineDirectory,DayDirectory,config,header):
 	FileXYBright = f"{DayDirectory}/SextractorCatalogue/{Base}_cat_bright.fits"										# Output file for calculation of RaDec coordinate of only the brighest stars
 
     # select the brightest objects
-	Nbright = int(config['NSources'])
+	Nbright = int(config['NSourcesAstro'])
 	BrightParameter = config['BrightParameter']
 	data_sexcat =  fits.open(FileXY)[1].data
 	index = np.argsort(data_sexcat[BrightParameter])
@@ -2475,13 +2695,15 @@ def AstrometryPart(File,PipelineDirectory,DayDirectory,config,header):
 		data_sexcat = data_sexcat[index][-Nbright:]
 	fits.writeto(FileXYBright, data_sexcat,overwrite=True)
 	result,status = astrometry(FileXYBright,header,DayDirectory + '/AstrometryFiles',config) 
+	logging.debug("Selected only brightest sources for Astrometry in " + File)
+	
 	# ~ #Transforms from XY to RaDec with WCS information from astrometry
 	
 	result2, status2	= XYToRaDec(FileWc,FileXY,FileOutput)																# Calculates RaDec positions for all stars obtained from sextractor
 	logging.info("Finished Astrometry Pass of image " + File)
 	if config['SaveTimes']:
 		Tempo = time.time() - A
-		with open('/home/luis/Desktop/Codigos/PipelineTrabalhar/Tempos','a') as tempos:
+		with open(f'{DayDirectory}/Times/Astrometry','a') as tempos:
 			linha = f'{Tempo:8}\n'
 			tempos.write(linha)
 	
@@ -2529,67 +2751,111 @@ def CatalogComparison(File,PipelineDirectory,DayDirectory,config,Catalogue):
 	scale = float(WCS[0].header['COMMENT'][-8].split()[1])
 	max_sep = float(config['max_sep'])*np.median(FWHM[FWHM!=0])*scale/3600
 	logging.debug("Catalog:P4")
-	idx,found = find_matching_stars(Detections, Catalogue, max_sep=max_sep * u.deg) 						# Starts matching between these stars and catalogue stars
-	print(psutil.virtual_memory()[3]/1000000000)
+	idx,found,d2d = find_matching_stars(Detections, Catalogue, max_sep=max_sep * u.deg) 						# Starts matching between these stars and catalogue stars
 	
 	logging.info("Finished Catalogue Comparison of image " + File)
 	Information = {'Xdetect':X,'Ydetect':Y,'RaCalculated':Ra,'DecCalculated':Dec,'MagInst':DetectionsMags,'FWHM':FWHM,'SNR':SNR,'Match':found}
 	
-	return Information, idx
+	if config['SaveTimes']:
+		Tempo = time.time() - A
+		with open(f'{DayDirectory}/Times/CatalogueComparison','a') as tempos:
+			linha = f'{Tempo:8}\n'
+			tempos.write(linha)
+	return Information, idx, Detections, d2d
 
 def DebrisClassification(DayDirectory,Images,config,scale):
+	A = time.time()
+	logging.info("Started Debris Classification of set " + Images[-1])
 	dic 		= CompareImagesJsonSkyCoord(DayDirectory,Images,scale)
+	logging.debug("Finished Image Comparison of set " + Images[-1])
 	dic_unicas 	= MakeDicUnique(dic)
-	objetos 	= SeeVariationOld(dic_unicas,np.radians(config['VariationInImage']/3600))
+	logging.debug("Created Unique Dict of set " + Images[-1])
+	objetos 	= SeeVariation(dic_unicas,np.radians(float(config['VariationInImage'])/3600))
+	logging.debug("Created Set of possible objects from set " + Images[-1])
 	objetos 	= CleanObjects(objetos,config)
+	logging.info("Finished Debris Classification of set " + Images[-1])	
+	if config['SaveTimes']:
+		Tempo = time.time() - A
+		with open(f'{DayDirectory}/Times/DebrisClassification','a') as tempos:
+			linha = f'{Tempo:8}\n'
+			tempos.write(linha)
 			
 	return objetos		
+
+def Run_TLE_Code(Images,config,PipelineDirectory,DayDirectory):
+	logging.info("Started TLE Comparison of set " + Images[-1])
+	A = time.time()
+	TLE_Directory = f"{DayDirectory}/TLE"
+	FileXY=f'{TLE_Directory}/TLEFiles/XY_window.cat'
+	header_data=[]
+	for img in Images:
+		Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + img}", unit = 'adu') 
+		header=Data.header
+		info=ReadFilesHeader(DayDirectory,header,img)
+		header_data.append(info)
+		
+	for i in header_data:
+		TLE=str(i['Year'])+str(i['Month'])+str(i['Day'])
+
+	TLE_file=f'TLE Catalog-{TLE}.json'
+	
+	if os.path.exists(f'{TLE_Directory}/TLEFiles/{TLE_file}'):
+		Satellite=TLESatellitePosition(config,DayDirectory,FileXY,Images,header_data,TLE_file,TLE_Directory)
+		Write_TLE_Output_Json(Images,Satellite,f"{TLE_Directory}/TLEOutput"	)
+		logging.info("Finished TLE Comparison of set " + Images[-1])
+
+	else:
+		print('TLE FILE missing')
+		logging.info("There were no available TLE for set " + Images[-1])
+	
+	if config['SaveTimes']:
+		Tempo = time.time() - A
+		with open(f'{DayDirectory}/Times/TLECode','a') as tempos:
+			linha = f'{Tempo:8}\n'
+			tempos.write(linha)
 				
 def ImageProcess(File,PipelineDirectory,DayDirectory,Masters,config,logging,Catalogue,CatalogueMags):
-	header 					= ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging)
-	result 					= SextractorPart(File,PipelineDirectory,DayDirectory,config)
-	result,status 			= AstrometryPart(File,PipelineDirectory,DayDirectory,config,header)
-	Information,idx 		= CatalogComparison(File,PipelineDirectory,DayDirectory,config,Catalogue)
+	A = time.time()
+	header 							= ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging)
+	result 							= SextractorPart(File,PipelineDirectory,DayDirectory,config)
+	result,status 					= AstrometryPart(File,PipelineDirectory,DayDirectory,config,header)
+	Information,idx,Detections,d2d	= CatalogComparison(File,PipelineDirectory,DayDirectory,config,Catalogue)
+	if config['Photometry']:
+		Mags 						= PSFPart(File,PipelineDirectory,DayDirectory,config,d2d)
+		Information['MagInst'] = Mags
+	
 	Filter = header['FILTER'].strip()
 	if Filter == 'none':
 		Filter = 'G'
-	WriteOutput_Json(File,DayDirectory,header,config,Information,Catalogue[idx],np.array(CatalogueMags[Filter])[idx])
-
-
+	WriteOutput_Json(File,DayDirectory,header,config,Information,Catalogue[idx],np.array(CatalogueMags[Filter])[idx],Detections)
+	
+	ImageNumber  = File.split('.')[0][-2:]
+	ImageInitial = File.split('.')[0][:-2]
+	if int(ImageNumber) == int(config['NumberImages']):
+		Images = []
+		for elem in os.listdir(f"{DayDirectory}/ProcessedImages"):
+			if ImageInitial in elem:
+				Images.append(elem)
+		Images.sort()
+		objects = DebrisClassification(DayDirectory,Images,config,scale=4.7)
+		# ~ Run_TLE_Code(Images,config,PipelineDirectory,DayDirectory)		
+		
+	if config['SaveTimes']:	
+		Tempo = time.time() - A
+		with open(f'{DayDirectory}/Times/EntireImage','a') as tempos:
+			linha = f'{Tempo:8}\n'
+			tempos.write(linha)
+	
 	return
 	
-#################################################################################################################################################################
 
-# In Development
 
-def CompareImagesTXT(Images):
-	if len(Images) == 1:
-		raise Exception('Not enough images to compare!')
-	dic = {}
-	Image = Images[0]
-	OutputFile = f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}"
-	Data = SPADEFunctions.ReadOutput(OutputFile)
-	for obj in range(len(Data['X'])):
-		dic[obj] = {}
-		dic['Image'] = [1]
-		keys = Data.keys()
-		for count, key in enumerate(keys):
-			dic[obj][key] = [Data[key][obj]]
-	
-	
-	for count, Image in enumerate(Images[1:-1]):
-		OutputFile = f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}"
-		Data = SPADEFunctions.ReadOutput(OutputFile)
-		time.sleep(500)
-		
-		for i in range(len(dic)):
-			obj = dic[i]
-			Valor = FindMatch(obj,Data) # Devolve None/False, ou  informacao Objeto 
-			if Valor:
-				for count, key in enumerate(dic[obj]):
-					dic[obj][key] = dic[obj][key].append(Valor[key])
-			else:
-				dic[len(dic)] = Valor
+
+
+
+
+
+
 
  
 ##################################################################################################################################################################
@@ -2614,7 +2880,6 @@ def CompareImagesTXT(Images):
 	for count, Image in enumerate(Images[1:-1]):
 		OutputFile = f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}"
 		Data = SPADEFunctions.ReadOutput(OutputFile)
-		time.sleep(500)
 		
 		for i in range(len(dic)):
 			obj = dic[i]
@@ -2730,7 +2995,7 @@ def CleanObjectsOld(Objects,config):
 				Ra1,Ra2 = Objects[obj]['Ra'][j],Objects[obj]['Ra'][j+1]
 				Dec1,Dec2 = Objects[obj]['Dec'][j],Objects[obj]['Dec'][j+1]
 				
-				distance = AngleDifferencePoints([Ra1,Dec1],[Ra2,Dec2])
+				distance = AngleDifferencePoints([Ra1,Dec1],[Ra2,Dec2],config['DistanceMethod'])
 				distance = distance/(image2-image1)
 				d.append(distance)
 				
@@ -2757,7 +3022,7 @@ def CleanObjectsOld(Objects,config):
 			
 	return Objects
 	
-def CompareImagesJson(DayDirectory,Images,scale):
+def CompareImagesJson(DayDirectory,Images,scale,config):
 	''' 
 	Function compares Json files to identify unique detections from each image. Slow and bad, use CompareImagesSkyCoord2
 	
@@ -2788,7 +3053,7 @@ def CompareImagesJson(DayDirectory,Images,scale):
 		with open(f"{DayDirectory}/OutputFiles/{Image.split('.')[0]}.json", 'r') as stream:
 			ImageData = json.load(stream)
 		for obj in ImageData:
-			Point = FindMatchJson(obj,dic,scale) # Devolve False ou chave do match
+			Point = FindMatchJson(obj,dic,scale,config) # Devolve False ou chave do match
 			if not Point:
 				dic[len(dic)] = {}
 				for i,key in enumerate(obj):
@@ -3044,7 +3309,7 @@ def SextractorPartOld(File,PipelineDirectory,DayDirectory,config):
 	Base.cat 			-> Sextractor catalog with FITS_1.0 types					(fits)
 	BaseLDAC.cat 		-> Sextractor catalog with FITS_LDAC types					(FITS_LDAC)
 	BaseLDAC_psf.fits	-> PSF model obtained with PSFEX							(Psf file)
-	Base_out.cat		-> Ouput file with PSFEX									(txt)
+	Base_out.cat		-> Output file with PSFEX									(txt)
 	Base_psfLDAC.cat	-> Sextractor catalog obtained using PSF model				(Final File)
 	'''
 	A = time.time()
@@ -3092,3 +3357,234 @@ def SextractorPartOld(File,PipelineDirectory,DayDirectory,config):
 	
 	
 	return resultado
+
+def SeeVariationOld3(dic_unicas,max_sep):
+	''' 
+	Receives dictionary with unique detections from each image and forms sets of points that may be a debris
+	
+	INPUTS:
+	dic_unicas			-> dictionary with all unique sources from each image				(dict)
+	max_sep				-> Maximum tolerated separation between consecutive frames			(float)
+	
+	RETURNS: 
+	objects				-> dictionary with sets of possible detections of the same debris	(dict)
+	
+	FILES CREATED:
+	NONE
+	''' 
+	
+	
+	objects = {}
+	keys = list(dic_unicas.keys())
+	Number1,Ra1,Dec1,X1,Y1,FWHM1 = dic_unicas[keys[0]]['Number'],  dic_unicas[keys[0]]['Ra'],  dic_unicas[keys[0]]['Dec'],	dic_unicas[keys[0]]['X'],	dic_unicas[keys[0]]['Y'], dic_unicas[keys[0]]['FWHM']
+	for i in range(len(Number1)):
+		objects[i] = {}
+		objects[i]['image'] = [keys[0]]
+		objects[i]['Number'] = [Number1[i]]
+		objects[i]['Ra'] = [Ra1[i]]
+		objects[i]['Dec'] = [Dec1[i]]
+		objects[i]['X'] = [X1[i]]
+		objects[i]['Y'] = [Y1[i]]
+		objects[i]['FWHM'] = [FWHM1[i]]
+
+	for image in keys[1:]:
+		Number2,Ra2,Dec2,X2,Y2,FWHM2 = dic_unicas[image]['Number'],dic_unicas[image]['Ra'],dic_unicas[image]['Dec'],dic_unicas[image]['X'],dic_unicas[image]['Y'],dic_unicas[image]['FWHM']
+			
+		Detections1 = SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
+		Detections2 = SkyCoord(ra = Longitude(Ra2, unit = u.deg), dec = np.array(Dec2)*u.deg, frame = 'cirs')  		# Sources of image N+1
+		
+		n = 1
+		while True:
+			idx, d2d, d3d = match_coordinates_sky(Detections2, Detections1,nthneighbor=n,storekdtree = True) 							#length matches Detectections1, n from Detections1 matches idx[n] goes into DetectionN
+			mask = d3d < max_sep
+			n+=1
+			if sum(mask) == 0:
+				break
+				
+			for count,found in enumerate(mask):
+				if found:
+					if image in objects[idx[count]]['image']:
+						nnew = len(objects)
+						objects[nnew] = {}
+						objects[nnew]['image']  =  objects[idx[count]]['image'][:-1]
+						objects[nnew]['Number'] =  objects[idx[count]]['Number'][:-1]
+						objects[nnew]['Ra']     =  objects[idx[count]]['Ra'][:-1]
+						objects[nnew]['Dec']    =  objects[idx[count]]['Dec'][:-1]
+						objects[nnew]['X']   	=  objects[idx[count]]['X'][:-1]
+						objects[nnew]['Y']    	=  objects[idx[count]]['Y'][:-1]
+						objects[nnew]['FWHM']  	=  objects[idx[count]]['FWHM'][:-1]
+						
+						objects[nnew]['image'].append(image)
+						objects[nnew]['Number'].append(Number2[count])
+						objects[nnew]['Ra'].append(Ra2[count])
+						objects[nnew]['Dec'].append(Dec2[count])
+						objects[nnew]['X'].append(X2[count])
+						objects[nnew]['Y'].append(Y2[count])
+						objects[nnew]['FWHM'].append(FWHM2[count])
+						
+					else:
+						objects[idx[count]]['image'].append(image)
+						objects[idx[count]]['Number'].append(Number2[count])
+						objects[idx[count]]['Ra'].append(Ra2[count])
+						objects[idx[count]]['Dec'].append(Dec2[count])
+						objects[idx[count]]['X'].append(X2[count])
+						objects[idx[count]]['Y'].append(Y2[count])
+						objects[idx[count]]['FWHM'].append(FWHM2[count])
+						
+				else:
+					nnew = len(objects)
+					objects[nnew] = {}
+					objects[nnew]['image'] 		= [image]
+					objects[nnew]['Number'] 	= [Number2[count]]
+					objects[nnew]['Ra'] 		= [Ra2[count]]
+					objects[nnew]['Dec']		= [Dec2[count]]
+					objects[nnew]['X'] 			= [X2[count]]
+					objects[nnew]['Y'] 			= [Y2[count]]
+					objects[nnew]['FWHM']		= [FWHM2[count]]
+				
+			
+		Ra1  = []
+		Dec1 = []
+		for i in range(len(objects)):
+			Number1.append(objects[i]['Number'][-1])
+			Ra1.append(objects[i]['Ra'][-1])
+			Dec1.append(objects[i]['Dec'][-1])
+	
+	return objects
+
+def SeeVariationOld4(dic_unicas,max_sep):
+	''' 
+	Receives dictionary with unique detections from each image and forms sets of points that may be a debris
+	
+	INPUTS:
+	dic_unicas			-> dictionary with all unique sources from each image				(dict)
+	{1:{'image':[1,1,1,1],'Number':[5,6,7,8],'Ra','Dec','X','Y','FWHM',
+	
+	max_sep				-> Maximum tolerated separation between consecutive frames, radians	(float)
+	
+	RETURNS: 
+	objects				-> dictionary with sets of possible detections of the same debris	(dict)
+	{0: {'image': [2], 'Number': [27], 'Ra': [120.57656867022732], 'Dec': [-6.254464296302288], 'X': [1817.36669921875], 'Y': [73.31082153320312], 'FWHM': [2.0498147010803223]}, 
+	1: {'image': [2], 'Number': [45], 'Ra': [120.51561729875857], 'Dec': [-6.278497634636404], 'X': [1863.556396484375], 'Y': [92.31710815429688], 'FWHM': [6.452471733093262]}}
+	FILES CREATED:
+	NONE
+	''' 
+	
+	
+	objects = {}
+	Images = list(dic_unicas.keys())
+	Number1,Ra1,Dec1,X1,Y1,FWHM1 = dic_unicas[Images[0]]['Number'],  dic_unicas[Images[0]]['Ra'],  dic_unicas[Images[0]]['Dec'],	dic_unicas[Images[0]]['X'],	dic_unicas[Images[0]]['Y'], dic_unicas[Images[0]]['FWHM']
+	# Saves all detections from image 1 as possible objects
+	for i in range(len(Number1)):
+		objects[i] = {}
+		objects[i]['image'] = [Images[0]]
+		objects[i]['Number'] = [Number1[i]]
+		objects[i]['Ra'] = [Ra1[i]]
+		objects[i]['Dec'] = [Dec1[i]]
+		objects[i]['X'] = [X1[i]]
+		objects[i]['Y'] = [Y1[i]]
+		objects[i]['FWHM'] = [FWHM1[i]]
+	
+	# For every consequent image, compares to the list of objects saved to see if it is closer than the max_sep given
+	# If the detection is not from a consecutive image, the separation needs to be in the interval expected with max_sep from each image
+	# If it finds a detection close enough, it saves both the old and the new set by appeding the new detection
+	# If it doesn't find any set to include, it saves the detection as a possible object for future comparisons 
+	
+	
+	for CurrentImage in Images[1:]:
+		Number2,Ra2,Dec2,X2,Y2,FWHM2 = dic_unicas[CurrentImage]['Number'],dic_unicas[CurrentImage]['Ra'],dic_unicas[CurrentImage]['Dec'],dic_unicas[CurrentImage]['X'],dic_unicas[CurrentImage]['Y'],dic_unicas[CurrentImage]['FWHM']
+			
+		DetectionsSaved 		= SkyCoord(ra = Longitude(Ra1, unit = u.deg), dec = np.array(Dec1)*u.deg, frame = 'cirs')		# Accumulated Sources
+		DetectionsCurrentImage 	= SkyCoord(ra = Longitude(Ra2, unit = u.deg), dec = np.array(Dec2)*u.deg, frame = 'cirs')  		# Sources of image N+1
+		
+		n = 0
+		while True:
+			n+=1
+			sums = 0
+			idx, d2d, d3d = match_coordinates_sky(DetectionsCurrentImage, DetectionsSaved,nthneighbor=n,storekdtree = True) 							#length matches DetectectionsCurrentImage, n from DetectionsCurrentImage matches idx[n] goes into DetectionSaved
+			for count,distance in enumerate(d3d): #mask
+				SavedObject = objects[idx[count]] 																									#d3d is in radians
+				ImageSaved = SavedObject['image'][-1]
+				found = distance < max_sep*(CurrentImage-ImageSaved)
+				
+				if found:
+					nnew = len(objects)
+					sums += 1
+					objects[nnew] = {}
+					objects[nnew]['image']  =  SavedObject['image']
+					objects[nnew]['Number'] =  SavedObject['Number']
+					objects[nnew]['Ra']     =  SavedObject['Ra']
+					objects[nnew]['Dec']    =  SavedObject['Dec']
+					objects[nnew]['X']   	=  SavedObject['X']
+					objects[nnew]['Y']    	=  SavedObject['Y']
+					objects[nnew]['FWHM']  	=  SavedObject['FWHM']
+					
+					objects[nnew]['image'].append(CurrentImage)
+					objects[nnew]['Number'].append(Number2[count])
+					objects[nnew]['Ra'].append(Ra2[count])
+					objects[nnew]['Dec'].append(Dec2[count])
+					objects[nnew]['X'].append(X2[count])
+					objects[nnew]['Y'].append(Y2[count])
+					objects[nnew]['FWHM'].append(FWHM2[count])
+					
+			if sums == 0:
+				# ~ print(CurrentImage)
+				# ~ print(n)
+				# ~ print('--------------')
+				break
+				
+		for i in range(len(Number2)):
+			nnew = len(objects)
+			objects[nnew] = {}
+			objects[nnew]['image'] 		= [CurrentImage]
+			objects[nnew]['Number'] 	= [Number2[count]]
+			objects[nnew]['Ra'] 		= [Ra2[count]]
+			objects[nnew]['Dec']		= [Dec2[count]]
+			objects[nnew]['X'] 			= [X2[count]]
+			objects[nnew]['Y'] 			= [Y2[count]]
+			objects[nnew]['FWHM']		= [FWHM2[count]]
+		Ra1  = []
+		Dec1 = []
+		for i in range(len(objects)):
+			Number1.append(objects[i]['Number'][-1])
+			Ra1.append(objects[i]['Ra'][-1])
+			Dec1.append(objects[i]['Dec'][-1])
+	
+	return objects
+
+def Run_TLE_Code2(config,PipelineDirectory,DayDirectory):
+	logging.info("Started TLE Comparison of image " + File)
+	TLE_Directory = f"{DayDirectory}/TLE"
+	FileXY=f'{TLE_Directory}/XY_window.cat'
+	files=os.listdir(f"{DayDirectory}/ProcessedImages")
+
+	A = time.time()
+	dic = {}
+	for elem in files:
+		if elem.split(".")[0][:-2] not in dic:
+			dic[elem.split(".")[0][:-2]]=[]
+		dic[elem.split(".")[0][:-2]].append(elem)
+		
+	result = list(dic.values())
+
+	
+	for FIT_Files in result:
+		header_data=[]
+		for img in FIT_Files:
+			Data = CCDData.read(f"{DayDirectory + '/ProcessedImages/' + img}", unit = 'adu') 
+			header=Data.header
+			info=ReadFilesHeader(DayDirectory,header,img)
+			header_data.append(info)
+			
+		for i in header_data:
+			TLE=str(i['Year'])+str(i['Month'])+str(i['Day'])
+
+		TLE_file=f'TLE Catalog-{TLE}.json'
+		
+		if os.path.exists(f'{TLE_Directory}/{TLE_file}'):
+			Satellite=TLESatellitePosition(config,DayDirectory,FileXY,FIT_Files,header_data,TLE_file,TLE_Directory)
+			Write_TLE_Output_Json(FIT_Files,Satellite,TLE_Directory)
+			logging.info("Finished TLE Comparison of image " + File)
+	
+		else:
+			print('TLE FILE missing')
