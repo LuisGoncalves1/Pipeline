@@ -130,98 +130,214 @@ maxLineGap - This is the maximum gap allowed between segments to be merged into 
 
 from skimage import io, filters, morphology
 
-#binarization of images
-def adaptiveThresh(image):
-	
-	thresh_gaussian = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV,11, 13)
-	
-	thresh_mean = cv2.adaptiveThreshold(image,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,2)
-	
-	_, thresh_otsu = cv2.threshold(image,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+def Histogram_Equalization():
+
+	image='PAER_SURV_4_260753_230228_042347+065500_scan017_01.fit'
+	image = CCDData.read(f"{image}", unit = 'adu') 
+	image = np.uint8(image.data/256) #convert uint16 to uint8
 	
 	
-	thresh_gaussian,thresh_mean,thresh_otsu=adaptiveThresh(image)
-	
-	cv2.namedWindow('Gaussian', cv2.WINDOW_NORMAL)  
-	cv2.imshow('Gaussian', thresh_gaussian)
-	screen_width, screen_height = 1090, 1080  
-	cv2.resizeWindow('Gaussian', screen_width, screen_height)
-	cv2.waitKey(0)
-	cv2.destroyAllWindows()
-	
-	
-	cv2.namedWindow('Mean', cv2.WINDOW_NORMAL)  
-	cv2.imshow('Mean', thresh_mean)
-	screen_width, screen_height = 1090, 1080  
-	cv2.resizeWindow('Mean', screen_width, screen_height)
-	cv2.waitKey(0)
-	cv2.destroyAllWindows()
-	
-	
-	
-	cv2.namedWindow('otsu', cv2.WINDOW_NORMAL)  
-	cv2.imshow('otsu', thresh_otsu)
-	screen_width, screen_height = 1090, 1080  
-	cv2.resizeWindow('otsu', screen_width, screen_height)
-	cv2.waitKey(0)
-	cv2.destroyAllWindows()
-		
-def binarization(image):
-	# Create a CLAHE object
-	clahe = cv2.createCLAHE(clipLimit=5, tileGridSize=(20, 20))  # Adjust the parameters as needed
-	
-	# Apply CLAHE to the image
+	#Image enhancement
+	clahe = cv2.createCLAHE(clipLimit=5, tileGridSize=(20, 20))  
 	enhanced_image = clahe.apply(image)
+	#enhanced_image=cv2.equalizeHist(image)
 	
-	#Display the original and enhanced images
-	# cv2.namedWindow('enhanced_image', cv2.WINDOW_NORMAL)  
-	# cv2.imshow('enhanced_image', enhanced_image)
-	# screen_width, screen_height = 1090, 1080  
-	# cv2.resizeWindow('enhanced_image', screen_width, screen_height)
-	# cv2.waitKey(0)
-	# cv2.destroyAllWindows()
+	# Calculate the histogram
+	hist_image = cv2.calcHist([image], [0], None, [256], [0, 256])
+	hist_enhanced_image = cv2.calcHist([enhanced_image], [0], None, [256], [0, 256])
+	
+	
+	plt.subplot(2, 2, 1)
+	plt.imshow(image, cmap='gray')
+	plt.title('Parte of Original Image')
+	plt.xlim(1666,2042)
+	plt.ylim(755,1122)
+	
+	plt.subplot(2, 2, 2)
+	plt.title('Grayscale Histogram')
+	plt.xlabel('Pixel Intensity')
+	plt.ylabel('Frequency')
+	plt.plot(hist_image)
+	plt.xlim(0,255)
+	plt.ylim(0,1100000)
+	
+	plt.subplot(2, 2, 3)
+	plt.imshow(enhanced_image, cmap='gray')
+	plt.title('Part of Enhanced Image')
+	plt.xlim(1666,2042)
+	plt.ylim(755,1122)
+	
+	
+	plt.subplot(2, 2, 4)
+	plt.title('Grayscale Histogram (Block=20, ClipLimit=5)')
+	plt.xlabel('Pixel Intensity')
+	plt.ylabel('Frequency')
+	plt.plot(hist_enhanced_image)
+	plt.xlim(0,255)
+	plt.ylim(0,1100000)
 	
 
-	gaussian_filter = cv2.GaussianBlur(enhanced_image, (3, 3), 0)
+	#plt.show()
+	
+	return enhanced_image	
 
-	threshold_value, binary_image = cv2.threshold(gaussian_filter, 50, 255, cv2.THRESH_BINARY)
+def Binarization_Study(gaussian_filter):
+	
+	#----------------------Global Thresh-----------------------------------------------
+	threshold_value, binary_image1 = cv2.threshold(gaussian_filter, 45, 1, cv2.THRESH_BINARY)
+	threshold_value, binary_image2 = cv2.threshold(gaussian_filter, 50,1, cv2.THRESH_BINARY)
+	threshold_value, binary_image3 = cv2.threshold(gaussian_filter, 55, 1, cv2.THRESH_BINARY)
+	titles = ['Global Thresh (c=45)',
+             'Global Thresh (c=50)', 'Global Thresh (c=55)']
+	images = [ binary_image1 ,binary_image2, binary_image3]
+
+	
+	#Adaptative Guassian Thresh
+	# thresh_gaussian1 = cv2.adaptiveThreshold(gaussian_filter, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11, -2)
+	# thresh_gaussian2 = cv2.adaptiveThreshold(gaussian_filter, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11, -3)
+	# thresh_gaussian3 = cv2.adaptiveThreshold(gaussian_filter, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11, -4)
+	# titles = ['Adaptive Gaussian Thresh (block=11,c=-2)',
+             # 'Adaptive Gaussian Thresh (block=11,c=-3)', 'Adaptive Gaussian Thresh (block=11,c=-4)']
+	# images = [ thresh_gaussian1 ,thresh_gaussian2, thresh_gaussian3]
+
+	
+	##Adaptative Thresh Mean 
+	thresh_mean = cv2.adaptiveThreshold(gaussian_filter,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,-3)
+
 	
 	
 	
-	# perform connected component analysis
-	num_labels, labels, stats, centroids = cv2.connectedcomponentswithstats(binary_image)
+	#Image filtering
+	#_, thresh_otsu = cv2.threshold(enhanced_image,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+	_, thresh_otsu_plusfilter = cv2.threshold(gaussian_filter,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+	 
 	
-	# create an array to store the filtered image
-	filtered_image = np.zeros_like(binary_image)
 	
-	# iterate over the connected components
-	for label in range(1, num_labels):
-	    # check the area of the component
-	    area = stats[label, cv2.cc_stat_area]
-	    # filter out small objects
-	    if area >= 60:
-	        # add the component to the filtered image
-	        filtered_image[labels == label] = 255
-	        
-	        
-	fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-	axs[0].imshow(image, cmap='gray')
-	axs[0].set_title('Original Image')
-	axs[0].axis('off')
-	axs[1].imshow(enhanced_image, cmap='gray')
-	axs[1].set_title('Enhanced Image')
-	axs[1].axis('off')
+	# titles = ['Global Thresh (c=50) + G.Filter ', 'Mean Adaptative Thresh+ G.Filter',
+            # 'Gaussian Adaptative Thresh+ G.Filter', 'Otsu Thresh+ G.Filter']
+	# images = [binary_image2, thresh_mean , thresh_gaussian,thresh_otsu_plusfilter]
+	for i in range(3):
+		plt.subplot(1,3,i+1),plt.imshow(images[i],'gray')
+		plt.title(titles[i])
+		plt.xticks([]),plt.yticks([])
+		plt.xlim(1666,2042)
+		plt.ylim(755,1122)
 	plt.show()
-	        
-	return enhanced_image,filtered_image
+
+def Binarization():
 	
+	enhanced_image	= Histogram_Equalization()
+	gaussian_filter = cv2.GaussianBlur(enhanced_image, (3, 3), 0)
+	hist_image_filtered = cv2.calcHist([gaussian_filter], [0], None, [256], [0, 256])
+	hist_image_enhanced = cv2.calcHist([enhanced_image], [0], None, [256], [0, 256])
+	
+	plt.subplot(2, 2, 1)
+	plt.imshow(enhanced_image, cmap='gray')
+	plt.title('Part of Enhanced Image')
+	plt.xlim(1666,2042)
+	plt.ylim(755,1122)
+	
+	plt.subplot(2, 2, 2)
+	plt.title('Grayscale Histogram of the Full Image')
+	plt.xlabel('Pixel Intensity')
+	plt.ylabel('Frequency')
+	plt.plot(hist_image_enhanced)
+	plt.xlim(0,255)
+	plt.ylim(0,1100000)
+	
+	plt.subplot(2, 2, 3)
+	plt.imshow(gaussian_filter, cmap='gray')
+	plt.title('Part of Enhanced Image + Gaussian Filter')
+	plt.xlim(1666,2042)
+	plt.ylim(755,1122)
+	
+	plt.subplot(2, 2, 4)
+	plt.title('Grayscale Histogram of the Full Image')
+	plt.xlabel('Pixel Intensity')
+	plt.ylabel('Frequency')
+	plt.plot(hist_image_filtered)
+	plt.xlim(0,255)
+	plt.ylim(0,1100000)
+	#plt.show()
+	
+	binary_image=Binarization_Study(gaussian_filter)
+	
+Binarization()
 
 	# cv2.namedWindow('Gaussian', cv2.WINDOW_NORMAL)  
-	# cv2.imshow('Gaussian', filtered_image)
+	# cv2.imshow('Gaussian', thresh_gaussian)
 	# screen_width, screen_height = 1090, 1080  
 	# cv2.resizeWindow('Gaussian', screen_width, screen_height)
 	# cv2.waitKey(0)
 	# cv2.destroyAllWindows()
+	
+	
+	# cv2.namedWindow('Mean', cv2.WINDOW_NORMAL)  
+	# cv2.imshow('Mean', thresh_mean)
+	# screen_width, screen_height = 1090, 1080  
+	# cv2.resizeWindow('Mean', screen_width, screen_height)
+	# cv2.waitKey(0)
+	# cv2.destroyAllWindows()
+	
+	
+	
+	# cv2.namedWindow('otsu', cv2.WINDOW_NORMAL)  
+	# cv2.imshow('otsu', thresh_otsu)
+	# screen_width, screen_height = 1090, 1080  
+	# cv2.resizeWindow('otsu', screen_width, screen_height)
+	# cv2.waitKey(0)
+	# cv2.destroyAllWindows()
+		
+# def binarization(image):
+	
+	# #Image enhancement
+	# clahe = cv2.createCLAHE(clipLimit=5, tileGridSize=(20, 20))  
+	# enhanced_image = clahe.apply(image)
+	
+	
+	
+	# # fig, axs = plt.subplots(1, 2,figsize=(10, 5))
+	# # axs[0].imshow(image, cmap='gray')
+	# # axs[0].set_title('Original Image')
+	# # axs[0].axis('off')
+	# # axs[1].imshow(enhanced_image, cmap='gray')
+	# # axs[1].set_title('Enhanced Image')
+	# # axs[1].axis('off')
+	# # plt.show()
+	
+	# #Image filtering
+	# gaussian_filter = cv2.GaussianBlur(enhanced_image, (3, 3), 0)
+	
+	# #Binarization
+	# threshold_value, binary_image = cv2.threshold(gaussian_filter, 50, 255, cv2.THRESH_BINARY)
+	
+	
+	# #Delete objets with an area with less than 60 pixels
+	# # perform connected component analysis
+	# num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary_image)
+	# # create an array to store the filtered image
+	# filtered_image = np.zeros_like(binary_image)
+	
+	# # iterate over the connected components
+	# for label in range(1, num_labels):
+	    # # check the area of the component
+	    # area = stats[label, cv2.CC_STAT_AREA]
+	    # # filter out small objects
+	    # if area >= 50:
+	        # # add the component to the filtered image
+	        # filtered_image[labels == label] = 255
+	        
+	# # fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+	# # axs[0].imshow(binary_image, cmap='gray')
+	# # axs[0].set_title('thresh Image')
+	# # axs[0].axis('off')
+	# # axs[1].imshow(filtered_image, cmap='gray')
+	# # axs[1].set_title('filtered Image')
+	# # axs[1].axis('off')
+	# # plt.show()
+    
+	# return enhanced_image,filtered_image
+	
 
 def houghlines():
 
@@ -232,8 +348,8 @@ def houghlines():
 	enhanced_image,binary_image=binarization(image)
 	
 	# Perform edge detection
-	#We need two threshold values, minVal and maxVal. Any edges with intensity gradient more than maxVal are sure to be edges 
-	#and those below minVal are sure to be non-edges, so discarded.
+	# We need two threshold values, minVal and maxVal. Any edges with intensity gradient more than maxVal are sure to be edges 
+	# and those below minVal are sure to be non-edges, so discarded.
 	T_lower=100 #Lower threshold value in Hysteresis Thresholding
 	T_upper=200	#Upper threshold value in Hysteresis Thresholding
 	
@@ -242,17 +358,15 @@ def houghlines():
 	#You can increase the Aperture size when you want to detect more detailed features.
 	edges = cv2.Canny(binary_image, T_lower,T_upper, aperture_size)
 	
-	
-	# cv2.namedWindow('edge', cv2.WINDOW_NORMAL)  
-	# cv2.imshow('edge', edges)
-	# screen_width, screen_height = 1090, 1080  
-	# cv2.resizeWindow('edge', screen_width, screen_height)
-	# cv2.waitKey(0)
-	# cv2.destroyAllWindows()
+	cv2.namedWindow('edge', cv2.WINDOW_NORMAL)  
+	cv2.imshow('edge', edges)
+	screen_width, screen_height = 1090, 1080  
+	cv2.resizeWindow('edge', screen_width, screen_height)
+	cv2.waitKey(0)
+	cv2.destroyAllWindows()
 
 	#Perform Probabilistic Hough Transform
-	
-	lines = cv2.HoughLinesP(edges,rho=1,theta=np.pi/180,threshold=10,minLineLength=100,maxLineGap=10)
+	lines = cv2.HoughLinesP(edges,rho=1,theta=np.pi/180,threshold=20,minLineLength=100,maxLineGap=10)
 	
 	# Extract line segment endpoints from Hough lines
 	line_segments = []
@@ -260,13 +374,27 @@ def houghlines():
 		for line in lines:
 			x1, y1, x2, y2 = line[0]
 			line_segments.append((x1, y1, x2, y2))
-	print(len(line_segments))
-
 	
-	
+	for line in line_segments:
+			x1=line[0]
+			y1=line[1]
+			x2=line[2]
+			y2=line[3]
+			
+			min_x = min(x1, x2)
+			max_x = max(x1, x2)
+			min_y = min(y1, y2)
+			max_y = max(y1, y2)
+	       
+			
+	print(f'min_x={min_x},max_x={max_x},min_y={min_y},max_y={max_y}')
 	for segment in line_segments:
 	    x1, y1, x2, y2 = segment
-	    cv2.line(enhanced_image, (x1, y1), (x2, y2), (0, 0, 255), 2)  # Draw line segments on the image
+	    cv2.line(enhanced_image, (x1, y1), (x2, y2), (0, 2, 255), 2)  
+	
+	# cv2.circle(enhanced_image, (min_x, min_y), 5, (0, 255, 0), 2)
+	# cv2.circle(enhanced_image, (max_x, max_y), 5, (0, 255, 0), 2)
+
 	
 	cv2.namedWindow('Probabilistic Hough Transform', cv2.WINDOW_NORMAL)  
 	cv2.imshow('Probabilistic Hough Transform', enhanced_image)
@@ -276,7 +404,7 @@ def houghlines():
 	cv2.destroyAllWindows()
 	
 	
-houghlines()
+#houghlines()
 	
 
 
@@ -347,15 +475,18 @@ def convert_degrees_to_hours_minutes(degrees):
 def TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory):
 		
 	file_contents=SPADEFunctions.TLE_parameters(TLE_Directory,TLE_file)
+	print(len(file_contents))
 	ts = load.timescale()
 	t_inicial=ts.utc(2023,2,28,19,59)
 	t_final=ts.utc(2023,2,28,20,21,49) 
 
 	Ra=[]
 	Dec=[]	
-
+	print('aaa')
+	count=0
 	for i in file_contents:
-
+			count=count+1
+			print(f'{count}')
 			line1=i['tle_1']
 			line2=i['tle_2']
 			nome='n' #o nome não interessa
@@ -380,7 +511,7 @@ def TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory):
 
 
 	plt.scatter(Ra, Dec,alpha=0.5,s=5)
-	
+	print('ccc')
 
 	# ra_target=['04 23 47.00','04 23 47.00','04 23 47.00','04 23 47.00','04 23 47.00','08 07 00.00','08 07 00.00','08 07 00.00','08 07 00.00']
 	# dec_target=['-3 13 45.0','+6 55 00.0','-0 41 33.0','+1 50 37.0','-8 18 07.0','-7 43 53.0','+4 57 03.0','-5 11 42.0','+2 24 52.0']
@@ -390,7 +521,7 @@ def TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory):
 	
 	
 	files=os.listdir(f"{DayDirectory}/TLE")
-	
+	print('aaa')
 	for ficheiro in files:
 		ra_window=[]
 		dec_window=[]
@@ -426,8 +557,8 @@ def TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory):
 	
 
 
-	plt.xlabel('Ra (Hours) ',fontsize=12)
-	plt.ylabel('Dec (Degrees)',fontsize=12)
+	plt.xlabel('Ra (Hours) ',fontsize=20)
+	plt.ylabel('Dec (Degrees)',fontsize=20)
 
 	angle=[0,15,30,45,60,75,90,105,120,135,150,165,180,195,210,225,240,255,270,285,300,315,330,345,360]
 	x=[]
@@ -435,11 +566,12 @@ def TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory):
 		hms=convert_degrees_to_hours_minutes(i)
 		x.append(hms)
 	
-	plt.xticks(angle, x)
+	plt.xticks(angle, x,fontsize=15)
 	
-	plt.xticks(angle, x)
+	plt.xticks(angle, x,fontsize=15)
 
 	plt.xlim([0, 359])
 	plt.ylim([-20, 20])
 	plt.show()
 
+#TLE_Graph(config,DayDirectory,TLE_file,TLE_Directory)
