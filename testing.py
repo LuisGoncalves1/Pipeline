@@ -25,9 +25,15 @@ config_file='ConfigurationDefesa.txt'
 config = SPADEFunctions.ReadPipelineConfig(PipelineDirectory + "/Files/Config/" + config_file)
 TLE_Directory = f"{DayDirectory}/TLE"
 FileXY=f'{TLE_Directory}/XY_window.cat'
+File='PAER_SURV_4_260753_230228_042347+065500_scan017_02.fit'
 
-	
-def Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,image,sat_xy_coordinates):
+
+Images=['PAER_SURV_4_260753_230228_042347+065500_scan017_01.fit','PAER_SURV_4_260753_230228_042347+065500_scan017_02.fit',
+'PAER_SURV_4_260753_230228_042347+065500_scan017_03.fit','PAER_SURV_4_260753_230228_042347+065500_scan017_04.fit']
+
+#SPADEFunctions.Run_TLE_Code(Images,config,PipelineDirectory,DayDirectory)
+
+def Drawing_Satellites_TLE_Position(DayDirectory,TLE_Directory):
 	
 	'''
 	Function created to plot the image being analysed and draw the position of the satellites on top of it, according to the files created in SatellitePosition
@@ -43,12 +49,21 @@ def Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,image,sat_xy_
 	'''
 	
 	
-	A=fits.open(f'{CatFilesDirectory}/{sat_xy_coordinates}')
-		
-	x=A[1].data['X']
-	y=A[1].data['Y']
 
+	image='PAER_SURV_4_260753_230228_042347+065500_scan017_02.fit'
+	json_file='PAER_SURV_4_260753_230228_042347+065500_scan017_Output.json'
 	
+
+	f = open(f"{TLE_Directory}/TLEOutput/{json_file}")
+	data = json.load(f)
+	x=[]
+	y=[]
+	for i in data:
+		if i["Image"]== image:
+			x.append(i['X (pixel) '])
+			y.append(i['Y (pixel) '])
+	    
+	    
 	fig = plt.figure()
 	ax = fig.add_subplot(111) 
 	vmin,vmax = None,None
@@ -57,297 +72,73 @@ def Drawing_Satellites_TLE_Position(DayDirectory,CatFilesDirectory,image,sat_xy_
 	Imagem = CCDData.read(f"{DayDirectory}/ProcessedImages/{image}", unit = 'adu') 
 	plt.imshow(Imagem,cmap='gray',vmin=vmin or np.nanpercentile(Imagem,3),vmax=vmax or np.nanpercentile(Imagem, 99))
 	plt.title(f"{image.split('.')[0]}")
+	#plt.xlim(1666,2042)
+	#plt.ylim(755,1122)
 
 
 	for i in range(0,len(x)):
 		c2 = plt.Circle((x[i],y[i]),4, color = 'blue', linewidth=2,fill=False)
 		ax.add_patch(c2)
 		
-	fontprops = fm.FontProperties(size=8)
+	# fontprops = fm.FontProperties(size=8)
 
-	scalebar = AnchoredSizeBar(ax.transData,
-                            75/4.7, '(75 arcsec)', 
-                            'lower center', 
-                           pad=0.1,
-                           color='white',
-                           frameon=False,
-                           size_vertical=1,
-                           fontproperties=fontprops)
+	# scalebar = AnchoredSizeBar(ax.transData,
+                            # 75/4.7, '(75 arcsec)', 
+                            # 'lower center', 
+                           # pad=0.1,
+                           # color='white',
+                           # frameon=False,
+                           # size_vertical=1,
+                           # fontproperties=fontprops)
 
-	ax.add_artist(scalebar)
+	# ax.add_artist(scalebar)
 	
 	plt.show()
 	
 	return True
 
-
 #--------------------------------------------------------------------------------------------------------
 #----------------------------Probabilistic Hough Transform ----------------------------------------------
 #--------------------------------------------------------------------------------------------------------
-'''
-The HoughLineP function in OpenCV performs probabilistic Hough line detection, which finds line segments in an image by considering only a subset of
-the possible parameter space, rather than the entire space. It works as follows:
 
-    Edge detection: The input image is typically pre-processed to extract edges using techniques such as Canny edge detection. 
-					This is because the Hough transform is sensitive to edges, and edge points are used as the input for line detection.
-
-    Line segment estimation: Random subsets of edge points are selected, and the corresponding lines in the parameter space are estimated. 
-							 This is done by calculating the (ρ, θ) values for the lines passing through the selected edge points.
-
-    Accumulation: The estimated lines are accumulated in a Hough accumulator, which is a 2D array representing the parameter space. 
-				  Each cell in the accumulator represents a possible line in the image.
-
-    Thresholding: After the accumulation, the accumulator is thresholded to identify the most prominent lines that have enough votes.
-				  The threshold is set using the threshold parameter in the HoughLineP function.
-
-    Line extraction: Line segments are extracted from the accumulator based on the thresholded votes.
-					 For each line segment, the corresponding (ρ, θ) values are converted back to Cartesian coordinates (x, y) to obtain the start and end points of the line segment.
-
-    Optional line filtering: Additional filtering can be applied, such as discarding lines that are too short or have large gaps between segments, 
-							using the minLineLength and maxLineGap parameters in the HoughLineP function.
-
-
-Parameters of HoughLineP Function
-
-image -  the input image on whiche the hough line detection is perfomed. It should be a single-channel grayscale image
-
-rho - This is the distance resolution of the accumulator in pixels. It determines the accuracy of the detection. 
-	  Smaller values of rho result in more accurate detection but may increase computation time.
-
-theta- This is the angular resolution of the accumulator in radians. It determines the angular accuracy of the detection.
-	   Smaller values of theta result in more accurate detection but may increase computation time.
-
-threshold - This is the minimum number of votes (or intersections in the accumulator) required for a line to be considered as a valid line. 
-			It is a threshold value that determines the line detection sensitivity. Smaller values of threshold result in more lines being detected,
-			but may also result in more false positives.
-			
-minLineLength - This is the minimum length of a line segment to be considered as a valid line. Lines shorter than this length will be discarded. 
-				It is specified in pixels.
-				
-maxLineGap - This is the maximum gap allowed between segments to be merged into a single line. Lines with gaps greater than this value will not be merged. 
-			It is specified in pixels.
-'''
-
-from skimage import io, filters, morphology
-
-def Histogram_Equalization():
-
-	image='PAER_SURV_4_260753_230228_042347+065500_scan017_01.fit'
+def Binarization(image):
+	
 	image = CCDData.read(f"{image}", unit = 'adu') 
 	image = np.uint8(image.data/256) #convert uint16 to uint8
-	
 	
 	#Image enhancement
 	clahe = cv2.createCLAHE(clipLimit=5, tileGridSize=(20, 20))  
 	enhanced_image = clahe.apply(image)
-	#enhanced_image=cv2.equalizeHist(image)
 	
-	# Calculate the histogram
-	hist_image = cv2.calcHist([image], [0], None, [256], [0, 256])
-	hist_enhanced_image = cv2.calcHist([enhanced_image], [0], None, [256], [0, 256])
-	
-	
-	plt.subplot(2, 2, 1)
-	plt.imshow(image, cmap='gray')
-	plt.title('Parte of Original Image')
-	plt.xlim(1666,2042)
-	plt.ylim(755,1122)
-	
-	plt.subplot(2, 2, 2)
-	plt.title('Grayscale Histogram')
-	plt.xlabel('Pixel Intensity')
-	plt.ylabel('Frequency')
-	plt.plot(hist_image)
-	plt.xlim(0,255)
-	plt.ylim(0,1100000)
-	
-	plt.subplot(2, 2, 3)
-	plt.imshow(enhanced_image, cmap='gray')
-	plt.title('Part of Enhanced Image')
-	plt.xlim(1666,2042)
-	plt.ylim(755,1122)
-	
-	
-	plt.subplot(2, 2, 4)
-	plt.title('Grayscale Histogram (Block=20, ClipLimit=5)')
-	plt.xlabel('Pixel Intensity')
-	plt.ylabel('Frequency')
-	plt.plot(hist_enhanced_image)
-	plt.xlim(0,255)
-	plt.ylim(0,1100000)
-	
-
-	#plt.show()
-	
-	return enhanced_image	
-
-def Binarization_Study(gaussian_filter):
-	
-	#----------------------Global Thresh-----------------------------------------------
-	threshold_value, binary_image1 = cv2.threshold(gaussian_filter, 45, 1, cv2.THRESH_BINARY)
-	threshold_value, binary_image2 = cv2.threshold(gaussian_filter, 50,1, cv2.THRESH_BINARY)
-	threshold_value, binary_image3 = cv2.threshold(gaussian_filter, 55, 1, cv2.THRESH_BINARY)
-	titles = ['Global Thresh (c=45)',
-             'Global Thresh (c=50)', 'Global Thresh (c=55)']
-	images = [ binary_image1 ,binary_image2, binary_image3]
-
-	
-	#Adaptative Guassian Thresh
-	# thresh_gaussian1 = cv2.adaptiveThreshold(gaussian_filter, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11, -2)
-	# thresh_gaussian2 = cv2.adaptiveThreshold(gaussian_filter, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11, -3)
-	# thresh_gaussian3 = cv2.adaptiveThreshold(gaussian_filter, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11, -4)
-	# titles = ['Adaptive Gaussian Thresh (block=11,c=-2)',
-             # 'Adaptive Gaussian Thresh (block=11,c=-3)', 'Adaptive Gaussian Thresh (block=11,c=-4)']
-	# images = [ thresh_gaussian1 ,thresh_gaussian2, thresh_gaussian3]
-
-	
-	##Adaptative Thresh Mean 
-	thresh_mean = cv2.adaptiveThreshold(gaussian_filter,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,-3)
-
-	
-	
-	
-	#Image filtering
-	#_, thresh_otsu = cv2.threshold(enhanced_image,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-	_, thresh_otsu_plusfilter = cv2.threshold(gaussian_filter,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-	 
-	
-	
-	# titles = ['Global Thresh (c=50) + G.Filter ', 'Mean Adaptative Thresh+ G.Filter',
-            # 'Gaussian Adaptative Thresh+ G.Filter', 'Otsu Thresh+ G.Filter']
-	# images = [binary_image2, thresh_mean , thresh_gaussian,thresh_otsu_plusfilter]
-	for i in range(3):
-		plt.subplot(1,3,i+1),plt.imshow(images[i],'gray')
-		plt.title(titles[i])
-		plt.xticks([]),plt.yticks([])
-		plt.xlim(1666,2042)
-		plt.ylim(755,1122)
-	plt.show()
-
-def Binarization():
-	
-	enhanced_image	= Histogram_Equalization()
 	gaussian_filter = cv2.GaussianBlur(enhanced_image, (3, 3), 0)
-	hist_image_filtered = cv2.calcHist([gaussian_filter], [0], None, [256], [0, 256])
-	hist_image_enhanced = cv2.calcHist([enhanced_image], [0], None, [256], [0, 256])
+	binary_image = cv2.adaptiveThreshold(gaussian_filter,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,-5)
 	
-	plt.subplot(2, 2, 1)
-	plt.imshow(enhanced_image, cmap='gray')
-	plt.title('Part of Enhanced Image')
-	plt.xlim(1666,2042)
-	plt.ylim(755,1122)
+	#----Delete objets with an area with less than 10 pixels---
 	
-	plt.subplot(2, 2, 2)
-	plt.title('Grayscale Histogram of the Full Image')
-	plt.xlabel('Pixel Intensity')
-	plt.ylabel('Frequency')
-	plt.plot(hist_image_enhanced)
-	plt.xlim(0,255)
-	plt.ylim(0,1100000)
+	# perform connected component analysis
+	num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary_image)
+	# create an array to store the filtered image
+	filtered_image = np.zeros_like(binary_image)
 	
-	plt.subplot(2, 2, 3)
-	plt.imshow(gaussian_filter, cmap='gray')
-	plt.title('Part of Enhanced Image + Gaussian Filter')
-	plt.xlim(1666,2042)
-	plt.ylim(755,1122)
+	# iterate over the connected components
+	for label in range(1, num_labels):
+	    # check the area of the component
+	    area = stats[label, cv2.CC_STAT_AREA]
+	    # filter out small objects
+	    if area >= 10:
+	        # add the component to the filtered image
+	        filtered_image[labels == label] = 255
 	
-	plt.subplot(2, 2, 4)
-	plt.title('Grayscale Histogram of the Full Image')
-	plt.xlabel('Pixel Intensity')
-	plt.ylabel('Frequency')
-	plt.plot(hist_image_filtered)
-	plt.xlim(0,255)
-	plt.ylim(0,1100000)
-	#plt.show()
-	
-	binary_image=Binarization_Study(gaussian_filter)
-	
-Binarization()
+	return binary_image,enhanced_image,filtered_image
 
-	# cv2.namedWindow('Gaussian', cv2.WINDOW_NORMAL)  
-	# cv2.imshow('Gaussian', thresh_gaussian)
-	# screen_width, screen_height = 1090, 1080  
-	# cv2.resizeWindow('Gaussian', screen_width, screen_height)
-	# cv2.waitKey(0)
-	# cv2.destroyAllWindows()
 	
+def HoughLines(DayDirectory,File):
 	
-	# cv2.namedWindow('Mean', cv2.WINDOW_NORMAL)  
-	# cv2.imshow('Mean', thresh_mean)
-	# screen_width, screen_height = 1090, 1080  
-	# cv2.resizeWindow('Mean', screen_width, screen_height)
-	# cv2.waitKey(0)
-	# cv2.destroyAllWindows()
+	image=f'{DayDirectory}/ProcessedImages/{File}'
+	binary_image,enhanced_image,filtered_image=Binarization(image)
 	
+	#----------- Perform edge detection---------------
 	
-	
-	# cv2.namedWindow('otsu', cv2.WINDOW_NORMAL)  
-	# cv2.imshow('otsu', thresh_otsu)
-	# screen_width, screen_height = 1090, 1080  
-	# cv2.resizeWindow('otsu', screen_width, screen_height)
-	# cv2.waitKey(0)
-	# cv2.destroyAllWindows()
-		
-# def binarization(image):
-	
-	# #Image enhancement
-	# clahe = cv2.createCLAHE(clipLimit=5, tileGridSize=(20, 20))  
-	# enhanced_image = clahe.apply(image)
-	
-	
-	
-	# # fig, axs = plt.subplots(1, 2,figsize=(10, 5))
-	# # axs[0].imshow(image, cmap='gray')
-	# # axs[0].set_title('Original Image')
-	# # axs[0].axis('off')
-	# # axs[1].imshow(enhanced_image, cmap='gray')
-	# # axs[1].set_title('Enhanced Image')
-	# # axs[1].axis('off')
-	# # plt.show()
-	
-	# #Image filtering
-	# gaussian_filter = cv2.GaussianBlur(enhanced_image, (3, 3), 0)
-	
-	# #Binarization
-	# threshold_value, binary_image = cv2.threshold(gaussian_filter, 50, 255, cv2.THRESH_BINARY)
-	
-	
-	# #Delete objets with an area with less than 60 pixels
-	# # perform connected component analysis
-	# num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary_image)
-	# # create an array to store the filtered image
-	# filtered_image = np.zeros_like(binary_image)
-	
-	# # iterate over the connected components
-	# for label in range(1, num_labels):
-	    # # check the area of the component
-	    # area = stats[label, cv2.CC_STAT_AREA]
-	    # # filter out small objects
-	    # if area >= 50:
-	        # # add the component to the filtered image
-	        # filtered_image[labels == label] = 255
-	        
-	# # fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-	# # axs[0].imshow(binary_image, cmap='gray')
-	# # axs[0].set_title('thresh Image')
-	# # axs[0].axis('off')
-	# # axs[1].imshow(filtered_image, cmap='gray')
-	# # axs[1].set_title('filtered Image')
-	# # axs[1].axis('off')
-	# # plt.show()
-    
-	# return enhanced_image,filtered_image
-	
-
-def houghlines():
-
-	image='PAER_SURV_4_260753_230228_042347+065500_scan017_01.fit'
-	image = CCDData.read(f"{image}", unit = 'adu') 
-	image = np.uint8(image.data/256) #convert uint16 to uint8
-	
-	enhanced_image,binary_image=binarization(image)
-	
-	# Perform edge detection
 	# We need two threshold values, minVal and maxVal. Any edges with intensity gradient more than maxVal are sure to be edges 
 	# and those below minVal are sure to be non-edges, so discarded.
 	T_lower=100 #Lower threshold value in Hysteresis Thresholding
@@ -356,17 +147,12 @@ def houghlines():
 	aperture_size=3 #Aperture size of the Sobel filter.
 	#The default value is 3 and its value should be odd between 3 and 7. 
 	#You can increase the Aperture size when you want to detect more detailed features.
-	edges = cv2.Canny(binary_image, T_lower,T_upper, aperture_size)
+	edges = cv2.Canny(filtered_image, T_lower,T_upper, aperture_size)
 	
-	cv2.namedWindow('edge', cv2.WINDOW_NORMAL)  
-	cv2.imshow('edge', edges)
-	screen_width, screen_height = 1090, 1080  
-	cv2.resizeWindow('edge', screen_width, screen_height)
-	cv2.waitKey(0)
-	cv2.destroyAllWindows()
-
-	#Perform Probabilistic Hough Transform
+	# ---------- Perform Probabilistic Hough Transform-------------
+	
 	lines = cv2.HoughLinesP(edges,rho=1,theta=np.pi/180,threshold=20,minLineLength=100,maxLineGap=10)
+	#number_of_detected_lines=len(lines)
 	
 	# Extract line segment endpoints from Hough lines
 	line_segments = []
@@ -374,40 +160,155 @@ def houghlines():
 		for line in lines:
 			x1, y1, x2, y2 = line[0]
 			line_segments.append((x1, y1, x2, y2))
-	
-	for line in line_segments:
-			x1=line[0]
-			y1=line[1]
-			x2=line[2]
-			y2=line[3]
-			
-			min_x = min(x1, x2)
-			max_x = max(x1, x2)
-			min_y = min(y1, y2)
-			max_y = max(y1, y2)
-	       
-			
-	print(f'min_x={min_x},max_x={max_x},min_y={min_y},max_y={max_y}')
+	#line_segments=[(1913, 878, 1922, 981), (1939, 930, 1952, 1085)]
+	# Draw the dected lines in enhanced_image_bgr_1 image. The enhanced image had to be converted to rgb in order to draw a green line
+	enhanced_image_bgr_1 = cv2.cvtColor(enhanced_image, cv2.COLOR_GRAY2BGR)
 	for segment in line_segments:
 	    x1, y1, x2, y2 = segment
-	    cv2.line(enhanced_image, (x1, y1), (x2, y2), (0, 2, 255), 2)  
+	    cv2.line(enhanced_image_bgr_1, (x1, y1), (x2, y2), (0, 255, 0), 2)  
 	
-	# cv2.circle(enhanced_image, (min_x, min_y), 5, (0, 255, 0), 2)
-	# cv2.circle(enhanced_image, (max_x, max_y), 5, (0, 255, 0), 2)
+	
+	# ----------Conditions to verify if two lines correspond to the same streak -----------
+	
+	#Condition 1- if the difference of the slope values is less than 1, it could be the same line
+	
+	#Get the slope and b values (y=mx+b)
+	
+	if len(line_segments) != 0:
+		slope_values=[]
+		b_values=[]
+		
+		for line in line_segments:
+				x1=line[0]
+				y1=line[1]
+				x2=line[2]
+				y2=line[3]
+				min_x = min(x1, x2)
+				max_x = max(x1, x2)
+				min_y = min(y1, y2)
+				max_y = max(y1, y2)
+				
+				slope=(max_y-min_y)/(max_x-min_x)
+				b=max_y-slope*max_x
+				
+				slope_values.append(slope)
+				b_values.append(b)
+				
+		
+		#if the difference of the slope values is <1, it saves the data given by the hough tranform function in the same key "streak"
+		#isto dá aqui mas está mal feito, tenho que pensar um bocado
+		streak=[]
+		for i in range(0,len(slope_values)-1):
+			my_dict={}
+			for j in range(i+1,len(slope_values)):
+				if abs(slope_values[i]-slope_values[j]) <= 1:
+					if "streak" in my_dict:
+						my_dict["streak"].append(line_segments[i])  
+						my_dict["streak"].append(line_segments[j])  
+					else:
+						my_dict["streak"] = [line_segments[i], line_segments[j]]
+			streak.append(my_dict)
+	
+		x1=[]
+		x2=[]
+		y1=[]
+		y2=[]
+		for i in streak:
+			for j in range(0,len(i['streak'])):
+				x1.append(i['streak'][j][0])
+				y1.append(i['streak'][j][1])
+				x2.append(i['streak'][j][2])
+				y2.append(i['streak'][j][3])
+		min_x = min(min(x1, x2))
+		max_x = max(max(x1, x2))
+		min_y = min(min(y1, y2))
+		max_y = max(max(y1, y2))
+				
+		enhanced_image_bgr_2 = cv2.cvtColor(enhanced_image, cv2.COLOR_GRAY2BGR)
+		cv2.line(enhanced_image_bgr_2, (min_x, min_y), (max_x, max_y), (0, 255, 0), 2)  
+			
+		x_metade=min_x+(max_x-min_x)/2
+		y_metade=min_y+(max_y-min_y)/2
+		XYToRaDec(FileWc,FileXY,FileOutput)
+		
+	    
+		images=[enhanced_image,binary_image,filtered_image,edges,enhanced_image_bgr_1,enhanced_image_bgr_2]
+		titles = ['Enhanced Image', 'Binary Image', 'Remove <10 px objects','Edge Detection',
+	             f'0 Hough Lines Dectected', 'Streak Detection']
+		
+		for i in range(6):
+			plt.subplot(2,3,i+1),plt.imshow(images[i],'gray')
+			plt.title(titles[i])
+			plt.xticks([]),plt.yticks([])
+			plt.xlim(1800,1900)
+			plt.ylim(0,150)
+			
+	else:
+		images=[enhanced_image,binary_image,filtered_image,edges,enhanced_image_bgr_1]
+		titles = ['Enhanced Image', 'Binary Image', 'Remove <10 px objects','Edge Detection',
+	             f'Hough Lines Dectected']
+		
+		for i in range(5):
+			plt.subplot(2,3,i+1),plt.imshow(images[i],'gray')
+			plt.title(titles[i])
+			plt.xticks([]),plt.yticks([])
+			plt.xlim(1800,1900)
+			plt.ylim(0,150)
+			plt.ylim(0,150)
+	plt.show()
+	
+streak_detection=HoughLines(DayDirectory,File)
 
-	
-	cv2.namedWindow('Probabilistic Hough Transform', cv2.WINDOW_NORMAL)  
-	cv2.imshow('Probabilistic Hough Transform', enhanced_image)
-	screen_width, screen_height = 1090, 1080  
-	cv2.resizeWindow('Probabilistic Hough Transform', screen_width, screen_height)
-	cv2.waitKey(0)
-	cv2.destroyAllWindows()
-	
-	
-#houghlines()
+
+#--------------------------------------------------------------------------------------------------------
+#----------------------------Binarization Study ----------------------------------------------
+#--------------------------------------------------------------------------------------------------------
+
+def Binarization_Study(enhanced_image):
 	
 
+	gaussian_filter = cv2.GaussianBlur(enhanced_image, (3, 3), 0)
+	
+	#----------------------Global Thresh-----------------------------------------------
+	# threshold_value, binary_image1 = cv2.threshold(gaussian_filter, 45, 1, cv2.THRESH_BINARY)
+	#threshold_value, binary_image2 = cv2.threshold(gaussian_filter, 50,1, cv2.THRESH_BINARY)
+	# threshold_value, binary_image3 = cv2.threshold(gaussian_filter, 55, 1, cv2.THRESH_BINARY)
+	# titles = ['Global Thresh (c=45)',
+             # 'Global Thresh (c=50)', 'Global Thresh (c=55)']
+	# images = [ binary_image1 ,binary_image2, binary_image3]
 
+	#Adaptative Guassian Thresh
+	# thresh_gaussian1 = cv2.adaptiveThreshold(gaussian_filter, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11, -2)
+	#thresh_gaussian2 = cv2.adaptiveThreshold(gaussian_filter, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11, -3)
+	# thresh_gaussian3 = cv2.adaptiveThreshold(gaussian_filter, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11, -4)
+	# titles = ['Adaptive Gaussian Thresh (block=11,c=-2)',
+             # 'Adaptive Gaussian Thresh (block=11,c=-3)', 'Adaptive Gaussian Thresh (block=11,c=-4)']
+	# images = [ thresh_gaussian1 ,thresh_gaussian2, thresh_gaussian3]
+
+	##Adaptative Thresh Mean 
+	thresh_mean1 = cv2.adaptiveThreshold(gaussian_filter,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,-4)
+	thresh_mean2 = cv2.adaptiveThreshold(gaussian_filter,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,-5)
+	thresh_mean3 = cv2.adaptiveThreshold(gaussian_filter,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,-6)
+	titles = ['Adaptive Mean Thresh (block=11,c=-4)',
+             'Adaptive Mean Thresh (block=11,c=-5)', 'Adaptive Mean Thresh (block=11,c=-6)']
+	images = [ thresh_mean1 ,thresh_mean2, thresh_mean3]
+
+	#Image filtering
+	#_, thresh_otsu_plusfilter = cv2.threshold(gaussian_filter,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+	 
+	
+	
+	# titles = ['Global Thresh (c=50) ', 'Mean Adaptative Thresh',
+            # 'Gaussian Adaptative Thresh', 'Otsu Thresh']
+            
+	# images = [binary_image2, thresh_mean2 , thresh_gaussian2,thresh_otsu_plusfilter]
+	for i in range(3):
+		plt.subplot(1,3,i+1),plt.imshow(images[i],'gray')
+		plt.title(titles[i])
+		plt.xticks([]),plt.yticks([])
+		plt.xlim(1666,2042)
+		plt.ylim(755,1122)
+	plt.show()
 
 #--------------------------------------------------------------------------------------------------------
 #------------------------------------------ Grafico -----------------------------------------------------
