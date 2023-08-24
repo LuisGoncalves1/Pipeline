@@ -5,7 +5,7 @@ import os
 from astropy.nddata import CCDData
 import numpy as np
 import astropy.units as u
-from photutils import make_source_mask, Background2D, MeanBackground
+from photutils import make_source_mask, Background2D, MeanBackground, MedianBackground
 from astropy.stats import SigmaClip
 import numpy as np
 import logging
@@ -30,7 +30,7 @@ import copy
 import psutil
 from numpy.lib.recfunctions import append_fields, drop_fields
 
-
+from mpl_toolkits.mplot3d import Axes3D
 # CATALOG FUNCTIONS
 
 # ~ def Guardar():
@@ -989,8 +989,27 @@ def SeePSF(File):
 	X,Y = np.meshgrid(x,y)
 	
 	fig = plt.figure()
-	ax = plt.axes(projection='3d')
+	ax = fig.add_subplot(111, projection='3d')
+	# ~ ax = plt.axes(projection='3d')
+	ax.set_xlabel('Pixel')
+	ax.set_ylabel('Pixel')
+	ax.set_zlabel('Arbitrary Unit')
+	
+	ax.xaxis.label.set_fontsize(17)
+	ax.yaxis.label.set_fontsize(17)
+	ax.zaxis.label.set_fontsize(17)
+	
+	ax.tick_params(axis='x', which='major', labelsize=13, pad=3)  # X-axis
+	ax.tick_params(axis='y', which='major', labelsize=13, pad=3)  # Y-axis
+	ax.tick_params(axis='z', which='major', labelsize=13, pad=3)  # Z-axis
+	
+	ax.xaxis.labelpad = 10
+	ax.yaxis.labelpad = 10
+	ax.zaxis.labelpad = 10
+		
 	ax.plot_wireframe(X,Y,PSF,color = 'black')
+	
+	
 	plt.show()
 	
 			   
@@ -1642,9 +1661,17 @@ def BackgroundCorrection(File,Data,logging):
 	NONE
 	'''
 	logging.debug("Eliminating Background of " + File)								# Logger information
-	bkg = MeanBackground(SigmaClip(sigma=3.))
-	bkg_value = bkg.calc_background(Data)												# Calculates background form image
-	Data = Data.subtract(bkg_value*np.ones(np.shape(Data))*u.adu,propagate_uncertainties=True,handle_meta='first_found') # Removes background from image
+	
+	# ~ bkg = MeanBackground(SigmaClip(sigma=3.))
+	# ~ bkg_value = bkg.calc_background(Data)												# Calculates background form image
+	# ~ Data = Data.subtract(bkg_value*np.ones(np.shape(Data))*u.adu,propagate_uncertainties=True,handle_meta='first_found') # Removes background from image
+	
+	sigma_clip = SigmaClip(sigma=3.0)
+	bkg_estimator = MedianBackground()
+	bkg = Background2D(Data.data, (128, 128), filter_size=(3, 3),
+					   sigma_clip=sigma_clip, bkg_estimator=bkg_estimator)
+	Data = Data.subtract(bkg.background*u.adu,propagate_uncertainties=True,handle_meta='first_found') # Removes background from image
+	
 	logging.debug("Background removed from " + File)								# Logger information
 	Data.header['BG'] = 'True'															# Writes in header	
 	return Data
@@ -1692,11 +1719,12 @@ def CosmicRayCorrection(File,Data,logging):
 	NONE
 	'''
 	logging.debug("Starting CosmicRays Correction of " + File)						# Logger information
-	crmask, Data.data = astroscrappy.detect_cosmics(Data.data, inmask = None, sepmed = False, cleantype='medmask', fsmode = 'median', verbose=False)  #deteta os raios cósmicos numa matriz numpy
+	# ~ crmask, Data.data = astroscrappy.detect_cosmics(Data.data, inmask = None, sepmed = False, cleantype='medmask', fsmode = 'median', verbose=False)  #deteta os raios cósmicos numa matriz numpy
+	crmask, Data.data = astroscrappy.detect_cosmics(Data.data, inmask = None, sepmed = False, cleantype='medmask', fsmode = 'convolve', verbose=False,psffwhm=6,sigclip=10)  #deteta os raios cósmicos numa matriz numpy
 	logging.debug("CosmicRays removed from " + File)								# Logger information
 	Data.header['CR'] = 'True'															# Writes in header
 	
-	return Data
+	return crmask,Data
 
 ###########################################################
 # Drawings
@@ -2217,9 +2245,9 @@ def TLE_parameters(TLE_Directory_Files,TLE_file):
 			
 			
 			#The following condition filters the tles from the catalog and stores only those in GeoProtectedZonePlus orbit
-			#if Perigee>geo_altitude-200 and Apogee<200+geo_altitude:  
-			#	data.append(temp)
-			data.append(temp)
+			if Perigee>geo_altitude-200 and Apogee<200+geo_altitude:  
+				data.append(temp)
+			# ~ data.append(temp)
 	return data
 									
 def AltAz_window(config,info,image,TLE_Directory,DayDirectory,FileXY):
@@ -2529,7 +2557,7 @@ def ImageReduction(File,PipelineDirectory,DayDirectory,Masters,config,logging):
 	
 	if config["CosmicRays"]:
 		A = time.time()
-		CosmicRayCorrection(File,Data,logging)
+		crmask,Data = CosmicRayCorrection(File,Data,logging)
 		CRTime = time.time()-A
 	else:
 		Data.header['CR'] = 'False'															# Writes in header

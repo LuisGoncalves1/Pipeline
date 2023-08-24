@@ -1,9 +1,12 @@
 # Initial Correction
 VERBOSE False
 
+Latitude 40.182416
+Longitude -7.874175
+Height 910
 
 LOGGER 10
-Catalog tycho2.dat				# Catalog to be used
+Catalog UCAC5					# Catalog to be used, the options implemented are: Tycho2 (tycho2.dat file), UCAC4 (UCAC4 folder), UCAC5 (UCAC5 folder), Hipparchos (hipparcos.fits files)  
 MagLim 15
 
 # Reduction Process
@@ -18,7 +21,7 @@ alfa2 0.008					# Value for CrossTalk correction
 CosmicRays True				# Decides if removes CosmicRays 
 Background True				# Decides if applies BackGround Correction
 Astrometry True				# Decides if runs Astrometry 
-
+SaveTimes True					# Saves time taken for each step in a separate file
 
 # Visual
 GRAPH False					# If True draws image

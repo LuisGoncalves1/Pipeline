@@ -46,7 +46,11 @@ if not os.path.isdir(DayDirectory):
 	os.mkdir(diretoria + "/SextractorCatalogue")
 	os.mkdir(diretoria + "/AstrometryFiles")
 	os.mkdir(diretoria + "/OutputFiles")
-
+	os.mkdir(diretoria + "/OutputFiles")
+	os.mkdir(diretoria + "/Times")
+	os.mkdir(diretoria + "/TLE")
+	os.mkdir(diretoria + "/TLE/TLEOutput")
+	os.mkdir(diretoria + "/TLE/TLEFiles")
 
 # Reads Configuration File
 config_file = sys.argv[1]
@@ -86,6 +90,7 @@ A = time.time()
 while True:
 	# While therer is no image, SPADE prints the number of active threads and the queue size
 	while len(os.listdir(path=DayDirectory + "/Images")) == 0:
+		print(psutil.virtual_memory()[3]/1000000000)
 		print("actives: " + str(len(threadpool._threads)))
 		print("queue: " + str(threadpool._work_queue.qsize()))
 		if threadpool._work_queue.qsize() + len(threadpool._threads) == 0:	
