@@ -8,7 +8,13 @@ Sextractor Params: NUMBER,FLUX_ISOCOR,MAG_ISOCOR,MAGERR_ISOCOR,FLUX_APER(1),FLUX
 An example config_file is placed in this pipeline. Build one for your own equipment. It allows you to control the entire pipeline, enabling/disabling different parts and control different parameters that affect them.
 
 Pipeline explanation:
-An illustration of the pipeline is available on this folder.
+An illustration of the pipeline is available on this folder in PipelineIllustration.png. It can be divided into 3 main parts: the reduction, characterization and RSO detection.
+
+The main code organization can be seen in the function ImageProcess in SpadeFunctions.py. Each part is completely separated for easier management.
+
+
+
+
 
 
 
