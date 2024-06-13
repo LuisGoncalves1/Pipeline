@@ -1,5 +1,5 @@
 The code is run by typing in terminal: 
-SPADE.py config_file Min_Dec Max_Dec
+python3 SPADE.py config_file Min_Dec Max_Dec
 
 The pipeline requires the following information:
 Headers: FILTER, EXPTIME, TIME,RA,DEC,NAXIS1,NAXIS2
